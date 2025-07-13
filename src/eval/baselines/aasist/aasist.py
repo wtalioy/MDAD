@@ -8,8 +8,7 @@ from importlib import import_module
 from eval.baselines.base import Baseline
 
 class AASIST(Baseline):
-    def __init__(self, config_path: str = "src/eval/baselines/aasist/config/AASIST.conf", device: str = "cuda", *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, config_path: str = "src/eval/baselines/aasist/config/AASIST.conf", device: str = "cuda", **kwargs):
         self.name = "AASIST"
         self.device = device
         self.model = self._load_model(config_path, device)
