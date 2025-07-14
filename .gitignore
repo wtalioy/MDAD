@@ -1,3 +1,6 @@
+# Weights and checkpoints
+*.pth
+
 # IDE and Editor specific files
 .vscode/
 .cursor/

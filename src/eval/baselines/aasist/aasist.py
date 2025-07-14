@@ -1,8 +1,9 @@
 import torch
 import json
 import numpy as np
+import soundfile as sf
 from typing import List, Union, Tuple, Optional
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from importlib import import_module
 
 from eval.baselines.base import Baseline
@@ -24,44 +25,29 @@ class AASIST(Baseline):
             torch.load(config["model_path"], map_location=device))
         return model
 
-    def _run_inference(self, data_loader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
+    def _run_inference(self, data_loader: DataLoader) -> np.ndarray:
         """
         Run inference on the data loader and return scores and labels.
         
         Returns:
             Tuple of (scores, labels) where:
             - scores: CM scores for each sample
-            - labels: True labels (0 for spoof, 1 for bonafide)
         """
         self.model.eval()
         scores = []
-        labels = []
         
         with torch.no_grad():
             for batch_data in data_loader:
                 # Handle different data loader formats
-                if len(batch_data) == 2:
-                    # Check if second element is labels or utterance IDs
-                    batch_x, batch_info = batch_data
-                    batch_x = batch_x.to(self.device)
-                    
-                    # Run model inference
-                    _, batch_out = self.model(batch_x)
-                    batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
-                    scores.extend(batch_scores.tolist())
-                    
-                    # Try to determine if batch_info contains labels
-                    if isinstance(batch_info[0], (int, float)) or (hasattr(batch_info, 'dtype') and batch_info.dtype in [torch.int64, torch.float32]):
-                        # Likely labels
-                        batch_labels = batch_info.cpu().numpy() if torch.is_tensor(batch_info) else np.array(batch_info)
-                        labels.extend(batch_labels.tolist())
-                    else:
-                        # Likely utterance IDs, labels unavailable
-                        labels.extend([None] * len(batch_scores))
-                else:
-                    raise ValueError("Unexpected data loader format")
-        
-        return np.array(scores), np.array(labels)
+                batch_x = batch_data
+                batch_x = batch_x.to(self.device)
+
+                # Run model inference
+                _, batch_out = self.model(batch_x)
+                batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
+                scores.extend(batch_scores.tolist())     
+
+        return np.array(scores)
 
     def _compute_det_curve(self, target_scores: np.ndarray, nontarget_scores: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute Detection Error Tradeoff (DET) curve."""
@@ -168,8 +154,8 @@ class AASIST(Baseline):
 
         return tDCF_norm, CM_thresholds
 
-    def eval_with(self, data: DataLoader, metric: Union[str, List[str]], 
-                  labels: Optional[np.ndarray] = None, 
+    def evaluate(self, data: List[str], metric: Union[str, List[str]], 
+                  labels: np.ndarray, 
                   asv_scores: Optional[dict] = None) -> dict:
         """
         Evaluate the model using specified metrics.
@@ -188,22 +174,44 @@ class AASIST(Baseline):
             metrics = [metric]
         else:
             metrics = metric
-            
+
+        def pad_random(x: np.ndarray, max_len: int = 64600):
+            x_len = x.shape[0]
+            # if duration is already long enough
+            if x_len >= max_len:
+                stt = np.random.randint(x_len - max_len)
+                return x[stt:stt + max_len]
+
+            # if too short
+            num_repeats = int(max_len / x_len) + 1
+            padded_x = np.tile(x, (num_repeats))[:max_len]
+            return padded_x
+
+        class CustomDataset(Dataset):
+            def __init__(self, data):
+                self.paths = data
+
+            def __len__(self):
+                return len(self.paths)
+
+            def __getitem__(self, idx):
+                # Assuming data is a list of file paths or similar
+                x, _ = sf.read(self.paths[idx])
+                x_pad = pad_random(x)
+                x_inp = torch.tensor(x_pad)
+                return x_inp
+
+        # Create DataLoader
+        dataset = CustomDataset(data)
+        data_loader = DataLoader(dataset, batch_size=4, shuffle=True, drop_last=True, pin_memory=True)
+
         # Run inference to get predictions
-        scores, data_labels = self._run_inference(data)
-        
-        # Use provided labels if available, otherwise use data labels
-        if labels is not None:
-            eval_labels = labels
-        elif data_labels[0] is not None:
-            eval_labels = data_labels
-        else:
-            raise ValueError("No labels available. Please provide labels parameter or ensure DataLoader returns labels.")
+        scores = self._run_inference(data_loader)
             
         # Separate bonafide and spoof scores based on labels
-        bonafide_mask = eval_labels == 1
-        spoof_mask = eval_labels == 0
-        
+        bonafide_mask = labels == 1
+        spoof_mask = labels == 0
+
         bonafide_scores = scores[bonafide_mask]
         spoof_scores = scores[spoof_mask]
         
