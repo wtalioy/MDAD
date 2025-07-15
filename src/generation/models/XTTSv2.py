@@ -1,9 +1,10 @@
 import numpy as np
+import TTS
 from TTS.api import TTS
 from .base import BaseTTS
 
-class YourTTS(BaseTTS):
-    def __init__(self, model_name="tts_models/multilingual/multi-dataset/your_tts"):
+class XTTSv2(BaseTTS):
+    def __init__(self, model_name="tts_models/multilingual/multi-dataset/xtts_v2"):
         super().__init__()
         self.tts = TTS(model_name=model_name).cuda()
         assert self.tts.synthesizer is not None, "TTS synthesizer is not initialized."
