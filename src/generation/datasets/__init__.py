@@ -1,8 +1,8 @@
 from .base import BaseRawDataset
-from .cmlr import CMLR
+from .news import News
 
 RAWDATASET_MAP = {
-    "cmlr": CMLR,
+    "news": News,
 }
 
 __all__ = ["BaseRawDataset", "RAWDATASET_MAP"]

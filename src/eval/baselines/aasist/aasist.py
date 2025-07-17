@@ -5,14 +5,16 @@ import soundfile as sf
 from typing import List, Union, Tuple, Optional
 from torch.utils.data import DataLoader, Dataset
 from importlib import import_module
-
+from tqdm import tqdm
 from eval.baselines.base import Baseline
+from eval.config import Label
 
 class AASIST(Baseline):
     def __init__(self, config_path: str = "src/eval/baselines/aasist/config/AASIST.conf", device: str = "cuda", **kwargs):
         self.name = "AASIST"
         self.device = device
         self.model = self._load_model(config_path, device)
+        self.supported_metrics = ['eer', 'tdcf']
 
     def _load_model(self, config_path: str, device: str):
         with open(config_path, "r") as f_json:
@@ -37,7 +39,7 @@ class AASIST(Baseline):
         scores = []
         
         with torch.no_grad():
-            for batch_data in data_loader:
+            for batch_data in tqdm(data_loader, desc="Running inference"):
                 # Handle different data loader formats
                 batch_x = batch_data
                 batch_x = batch_x.to(self.device)
@@ -154,27 +156,9 @@ class AASIST(Baseline):
 
         return tDCF_norm, CM_thresholds
 
-    def evaluate(self, data: List[str], metric: Union[str, List[str]], 
+    def evaluate(self, data: List[str], metrics: List[str], 
                   labels: np.ndarray, 
                   asv_scores: Optional[dict] = None) -> dict:
-        """
-        Evaluate the model using specified metrics.
-        
-        Args:
-            data: DataLoader containing evaluation data
-            metric: Metric(s) to compute ('eer', 'tdcf', or list of metrics)
-            labels: Optional ground truth labels (0 for spoof, 1 for bonafide)
-            asv_scores: Optional ASV scores for t-DCF computation
-            
-        Returns:
-            Dictionary containing computed metrics
-        """
-        # Ensure metric is a list
-        if isinstance(metric, str):
-            metrics = [metric]
-        else:
-            metrics = metric
-
         def pad_random(x: np.ndarray, max_len: int = 64600):
             x_len = x.shape[0]
             # if duration is already long enough
@@ -209,8 +193,8 @@ class AASIST(Baseline):
         scores = self._run_inference(data_loader)
             
         # Separate bonafide and spoof scores based on labels
-        bonafide_mask = labels == 1
-        spoof_mask = labels == 0
+        bonafide_mask = labels == Label.real.value
+        spoof_mask = labels == Label.fake.value
 
         bonafide_scores = scores[bonafide_mask]
         spoof_scores = scores[spoof_mask]
@@ -221,7 +205,9 @@ class AASIST(Baseline):
         results = {}
         
         for m in metrics:
-            m = m.lower()
+            if m not in self.supported_metrics:
+                raise ValueError(f"Unsupported metric: {m}")
+            
             if m == 'eer':
                 eer, threshold = self.compute_eer(bonafide_scores, spoof_scores)
                 results['eer'] = float(eer)
@@ -251,8 +237,5 @@ class AASIST(Baseline):
                 except Exception as e:
                     print(f"Warning: Could not compute t-DCF: {e}")
                     results['min_tdcf'] = None
-                    
-            else:
-                print(f"Warning: Unknown metric '{m}'. Supported metrics: 'eer', 'tdcf'")
         
         return results

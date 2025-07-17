@@ -8,7 +8,8 @@ from .text import text_to_sequence
 from models.base import BaseTTS
 
 class VITS(BaseTTS):
-    def __init__(self, config="src/generation/models/vits/configs/vctk_base.json", ckpt="src/generation/models/vits/pretrained_vctk.pth"):
+    def __init__(self, config="src/generation/models/vits/configs/vctk_base.json", ckpt="src/generation/models/vits/pretrained_vctk.pth", *args, **kwargs):
+        self.model_name = "VITS"
         self.hps = get_hparams_from_file(config)
         self.net_g = SynthesizerTrn(
             len(symbols),
@@ -19,7 +20,7 @@ class VITS(BaseTTS):
         self.net_g.eval()
         load_checkpoint(ckpt, self.net_g, None)
 
-    def infer(self, text: str, sid=4):
+    def infer(self, text: str, sid=4, **kwargs):
         text_norm = text_to_sequence(text, self.hps.data.text_cleaners)
         if self.hps.data.add_blank:
             text_norm = commons.intersperse(text_norm, 0)

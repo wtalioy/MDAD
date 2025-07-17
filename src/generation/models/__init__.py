@@ -1,13 +1,4 @@
-from .base import BaseTTS
-from .vits.vits import VITS
-from .XTTSv2 import XTTSv2
-from .YourTTS import YourTTS
+from .tts import BaseTTS, TTS_MODEL_MAP
+from .vc import BaseVC, VC_MODEL_MAP
 
-
-MODEL_MAP = {
-    "vits": VITS,
-    "xttsv2": XTTSv2,
-    "yourtts": YourTTS,
-}
-
-__all__ = ["BaseTTS", "MODEL_MAP"]
+__all__ = ["BaseTTS", "TTS_MODEL_MAP", "BaseVC", "VC_MODEL_MAP"]
