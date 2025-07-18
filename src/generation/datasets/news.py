@@ -7,4 +7,4 @@ class News(BaseRawDataset):
         super().__init__(data_dir)
 
     def generate(self, tts_models: List[BaseTTS], vc_models: Optional[List[BaseVC]] = None, *args, **kwargs):
-        super().generate(tts_models, language="zh-cn", *args, **kwargs)
+        super().generate(tts_models, language="zh-cn", use_case="news", *args, **kwargs)

@@ -7,4 +7,4 @@ class Podcast(BaseRawDataset):
         super().__init__(data_dir)
 
     def generate(self, tts_models: List[BaseTTS], vc_models: Optional[List[BaseVC]] = None, *args, **kwargs):
-        super().generate(tts_models, language="en", *args, **kwargs)
+        super().generate(tts_models, language="en", use_case="podcasts", *args, **kwargs)

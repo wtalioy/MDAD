@@ -50,7 +50,7 @@ class BaseRawDataset:
 
                     try:
                         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, language=kwargs.get('language', 'en'))
+                        fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, **kwargs)
                         fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
                         sf.write(output_path, fake_audio, self.sample_rate)
                         logger.info(f"Generated audio at {output_path}")
@@ -97,7 +97,7 @@ class BaseRawDataset:
                             os.makedirs(os.path.dirname(output_path), exist_ok=True)
                             
                             # First generate audio with TTS
-                            fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, language=kwargs.get('language', 'en'))
+                            fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, **kwargs)
                             fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
                             
                             # Save TTS audio as temporary file
