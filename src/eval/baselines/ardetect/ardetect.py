@@ -1,7 +1,7 @@
 from typing import Dict, Any, cast, List, Tuple
 import soundfile as sf
 import numpy as np
-import logging
+from loguru import logger
 from tqdm import tqdm
 import torch
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
@@ -10,8 +10,6 @@ from eval.baselines.base import Baseline
 from eval.baselines.ardetect.mmd_model import ModelLoader
 from eval.baselines.ardetect.mmd_utils import MMD_3_Sample_Test
 from eval.config import Label
-
-logger = logging.getLogger(__name__)
 
 class ARDetect(Baseline):
     def __init__(self,
