@@ -5,6 +5,7 @@ from .base import BaseTTS
 class Bark(BaseTTS):
     def __init__(self, *args, **kwargs):
         self.model_name = "Bark"
+        self.require_vc = True
         self.model_id = "tts_models/multilingual/multi-dataset/bark"
         self.model = TTS(model_name=self.model_id).cuda()
         assert self.model.synthesizer is not None, "TTS synthesizer is not initialized."

@@ -11,6 +11,7 @@ USE_CASE = {
 class ElevenLabsTTS:
     def __init__(self, api_key: str, *args, **kwargs):
         self.model_name = "ElevenLabs"
+        self.require_vc = True
         self.client = ElevenLabs(api_key=api_key)
 
     def get_voices(self):

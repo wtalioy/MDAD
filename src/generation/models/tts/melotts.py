@@ -4,8 +4,9 @@ from .base import BaseTTS
 class MeloTTS(BaseTTS):
     def __init__(self, *args, **kwargs):
         self.model_name = "MeloTTS"
+        self.require_vc = True
 
-    def infer(self, text: str, ref_audio: str, language="en", **kwargs):
+    def infer(self, text: str, language="en", **kwargs):
         speed = 1.0
         model = TTS(language=language, device="auto")
         speaker_ids = model.hps.data.spk2id

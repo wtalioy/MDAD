@@ -5,6 +5,7 @@ from .base import BaseTTS
 class YourTTS(BaseTTS):
     def __init__(self, *args, **kwargs):
         self.model_name = "YourTTS"
+        self.require_vc = False
         self.model_id = "tts_models/multilingual/multi-dataset/your_tts"
         self.model = TTS(model_name=self.model_id).cuda()
         assert self.model.synthesizer is not None, "TTS synthesizer is not initialized."
