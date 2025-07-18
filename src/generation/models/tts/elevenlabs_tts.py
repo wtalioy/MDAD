@@ -1,5 +1,6 @@
 import numpy as np
 from elevenlabs import ElevenLabs
+from .base import BaseTTS
 
 USE_CASE = {
     "news": "5Q0t7uMcjvnagumLfvZi", # Paul
@@ -8,7 +9,7 @@ USE_CASE = {
     "public_speeches": "9BWtsMINqrJLrRacOk9x", # Aria
 }
 
-class ElevenLabsTTS:
+class ElevenLabsTTS(BaseTTS):
     def __init__(self, api_key: str, *args, **kwargs):
         self.model_name = "ElevenLabs"
         self.require_vc = True

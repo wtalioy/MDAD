@@ -12,5 +12,5 @@ class Tacotron2(BaseTTS):
         self.sample_rate = int(self.model.synthesizer.output_sample_rate)
 
     def infer(self, text: str, **kwargs):
-        wav = self.model.tts(text=text, language="zh-cn")
+        wav = self.model.tts(text=text)
         return np.array(wav), self.sample_rate

@@ -1,15 +1,12 @@
 import csv
 import os
-from typing import List
 import numpy as np
 from .base import BaseDataset
-from ..baselines import Baseline
 from ..config import Label
 
 class PublicFigures(BaseDataset):
-    def __init__(self):
-        super().__init__()
-        self.data, self.labels = self._load_meta()
+    def __init__(self, data_dir=None):
+        super().__init__(data_dir or "data/PublicFigures")
 
     def _load_meta(self):
         with open(os.path.join(self.data_dir, 'meta.csv'), 'r', encoding='utf-8') as f:
@@ -22,6 +19,3 @@ class PublicFigures(BaseDataset):
                 file_paths.append(file_path)
                 labels.append(label)
         return file_paths, np.array(labels)
-
-    def evaluate(self, baseline: Baseline, metrics: List[str]) -> dict:
-        return baseline.evaluate(data=self.data, labels=self.labels, metrics=metrics)

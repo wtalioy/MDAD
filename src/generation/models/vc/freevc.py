@@ -6,8 +6,8 @@ class FreeVC(BaseVC):
         self.model_name = "FreeVC"
         self.model_id = "voice_conversion_models/multilingual/vctk/freevc24"
         self.model = TTS(model_name=self.model_id).cuda()
-        assert self.model.synthesizer is not None, "TTS synthesizer is not initialized."
-        self.sample_rate = int(self.model.synthesizer.output_sample_rate)
+        assert self.model.voice_converter is not None, "VC voice converter is not initialized."
+        self.sample_rate = int(self.model.voice_converter.output_sample_rate)
 
     def convert(self, source_path: str, target_path: str, output_path: str, **kwargs):
         self.model.voice_conversion_to_file(source_wav=source_path, target_wav=target_path, file_path=output_path)
