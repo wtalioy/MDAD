@@ -20,7 +20,7 @@ class ARDetect(Baseline):
         self.name = "ARDetect"
         self.device = device
         self.sample_rate = 16000
-        self.segment_sec = 0.4
+        self.segment_sec = 0.625
         self.supported_metrics = ['eer']
 
         self.extractor = Wav2Vec2FeatureExtractor.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
