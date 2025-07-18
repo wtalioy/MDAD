@@ -13,10 +13,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate audio data using TTS model")
-    parser.add_argument("--dataset", type=str, default="cmlr", help="Name of the dataset", choices=list(RAWDATASET_MAP.keys()))
-    parser.add_argument("--tts_model", type=str, nargs="+", default=["xttsv2"], help="Name of the TTS model", choices=list(TTS_MODEL_MAP.keys()))
-    parser.add_argument("--vc_model", type=str, nargs="+", default=["knnvc"], help="Name of the VC model", choices=list(VC_MODEL_MAP.keys()))
-    parser.add_argument("--data_dir", type=str, default="data/CMLR", help="Directory for dataset")
+    parser.add_argument("--dataset", type=str, default="news", help="Name of the dataset", choices=list(RAWDATASET_MAP.keys()))
+    parser.add_argument("--tts_model", type=str, nargs="+", default=["xttsv2", "yourtts", "melotts", "tacotron2", "bark"], help="Name of the TTS model", choices=list(TTS_MODEL_MAP.keys()))
+    parser.add_argument("--vc_model", type=str, nargs="+", default=["knnvc", "freevc", "openvoice"], help="Name of the VC model", choices=list(VC_MODEL_MAP.keys()))
+    parser.add_argument("--data_dir", type=str, default=None, help="Directory for dataset")
     
     args = parser.parse_args()
     main(args)
