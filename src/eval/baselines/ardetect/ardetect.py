@@ -11,6 +11,15 @@ from eval.baselines.ardetect.mmd_model import ModelLoader
 from eval.baselines.ardetect.mmd_utils import MMD_3_Sample_Test
 from eval.config import Label
 
+# Fix datasets import conflict by temporarily modifying sys.path
+import sys
+_original_path = sys.path.copy()
+sys.path = [p for p in sys.path if not (p.endswith('src') or p.endswith('src/eval'))]
+try:
+    from datasets import load_dataset as hf_load_dataset
+finally:
+    sys.path = _original_path
+
 class ARDetect(Baseline):
     def __init__(self,
                  wav2vec_model_path: str | None = None,
@@ -65,10 +74,9 @@ class ARDetect(Baseline):
 
 
     def _load_asvspoof(self, limit: int = 1024) -> Tuple[List[np.ndarray], List[np.ndarray]]:
-        from datasets import load_dataset
         real_data = []
         fake_data = []
-        data = load_dataset("Bisher/ASVspoof_2019_LA", split="train")
+        data = hf_load_dataset("Bisher/ASVspoof_2019_LA", split="train")
         for item in data:
             item = cast(Dict[str, Any], item)
             if item["key"] == 0 and len(real_data) < limit:
