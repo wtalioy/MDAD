@@ -8,7 +8,7 @@ from generation.datasets import RAWDATASET_MAP
 
 
 def main(args):
-    raw_dataset = RAWDATASET_MAP[args.dataset](data_dir=args.data_dir)
+    raw_dataset = RAWDATASET_MAP[args.dataset](**vars(args))
     tts_models = [TTS_MODEL_MAP[model]() for model in args.tts_model]
     vc_models = [VC_MODEL_MAP[model]() for model in args.vc_model]
     raw_dataset.generate(tts_models=tts_models, vc_models=vc_models)
