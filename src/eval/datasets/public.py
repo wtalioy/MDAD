@@ -5,8 +5,8 @@ from .base import BaseDataset
 from config import Label
 
 class PublicFigures(BaseDataset):
-    def __init__(self, data_dir=None):
-        super().__init__(data_dir or "data/PublicFigures")
+    def __init__(self, data_dir=None, *args, **kwargs):
+        super().__init__(data_dir or "data/PublicFigures", *args, **kwargs)
 
     def _load_meta(self):
         with open(os.path.join(self.data_dir, 'meta.csv'), 'r', encoding='utf-8') as f:
