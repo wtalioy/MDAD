@@ -18,6 +18,7 @@ class BaseRawDataset:
         text = item['text']
         audio_path = os.path.join(self.data_dir, item['audio']['real'])
         output_path = audio_path.replace("audio/real", "audio/fake")
+        item['audio']['fake'] = {}
         
         try:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -46,8 +47,7 @@ class BaseRawDataset:
                 model_name = f"{tts_model.model_name} + {vc_model.model_name}"
             
             logger.info(f"Generated audio at {output_path}")
-            item['audio']['fake'] = output_path
-            item['audio']['model'] = model_name
+            item['audio']['fake'][model_name] = output_path
             return True
             
         except Exception as e:
