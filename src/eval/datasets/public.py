@@ -2,7 +2,7 @@ import csv
 import os
 import numpy as np
 from .base import BaseDataset
-from ..config import Label
+from config import Label
 
 class PublicFigures(BaseDataset):
     def __init__(self, data_dir=None):

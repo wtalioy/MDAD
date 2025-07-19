@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from models import BaseTTS, BaseVC
 import os
 import json
@@ -6,7 +6,6 @@ from loguru import logger
 from tqdm import tqdm
 import soundfile as sf
 import librosa
-import random
 
 class BaseRawDataset:
     def __init__(self, data_dir: str, *args, **kwargs):
@@ -93,24 +92,32 @@ class BaseRawDataset:
             combo_name = tts.model_name + (f" + {vc.model_name}" if vc else "")
             logger.info(f"  {i+1}. {combo_name}")
         
-        # Process each item with retry logic
+        # Process each item with round-robin distribution and fallback logic
         failed_items = []
-        for item in tqdm(meta_data, desc="Generating audio"):
+        for idx, item in enumerate(tqdm(meta_data, desc="Generating audio")):
             success = False
             
-            # Try combinations in order, then shuffle remaining ones for retries
-            for i, (tts_model, vc_model) in enumerate(all_combinations):
-                logger.info(f"Trying combination {i+1} of {len(all_combinations)}: {tts_model.model_name} + {vc_model.model_name if vc_model else 'None'}")
+            # Start with the assigned combination (round-robin distribution)
+            start_combo_idx = idx % len(all_combinations)
+            
+            # Try combinations starting from the assigned one, then cycle through others
+            for i in range(len(all_combinations)):
+                combo_idx = (start_combo_idx + i) % len(all_combinations)
+                tts_model, vc_model = all_combinations[combo_idx]
+                
+                combo_name = tts_model.model_name + (f" + {vc_model.model_name}" if vc_model else "")
+                if i == 0:
+                    logger.info(f"Processing item {idx+1} with assigned combination: {combo_name}")
+                else:
+                    logger.info(f"Trying fallback combination {i+1}: {combo_name}")
+                
                 if self._try_generate_audio(item, tts_model, vc_model, **kwargs):
                     success = True
+                    logger.info(f"Successfully generated audio for item {idx+1}")
                     break
-                
-                # If primary attempt failed and there are more combinations, try others
-                if i == 0 and len(all_combinations) > 1:
-                    logger.info(f"Primary combination failed, trying alternatives...")
             
             if not success:
-                logger.warning(f"Failed to generate audio for item with all combinations: {item['text'][:50]}...")
+                logger.warning(f"Failed to generate audio for item {idx+1} with all combinations: {item['text'][:50]}...")
                 failed_items.append(item)
 
         # Save updated metadata

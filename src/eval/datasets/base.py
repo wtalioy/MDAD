@@ -2,8 +2,8 @@ import os
 import numpy as np
 from typing import List
 import json
-from ..baselines import Baseline
-from ..config import Label
+from baselines import Baseline
+from config import Label
 
 class BaseDataset:
     def __init__(self, data_dir: str, *args, **kwargs):
