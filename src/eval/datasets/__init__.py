@@ -1,13 +1,13 @@
 from .base import BaseDataset
-from .public import PublicFigures
+from .publicfigure import PublicFigure
 from .news import News
 from .podcast import Podcast
-from .PartialFake import PartialFake
+from .partialfake import PartialFake
 from .audiobook import Audiobook
 from .noisyspeech import NoisySpeech
 
 DATASET_MAP = {
-    "public": PublicFigures,
+    "publicfigure": PublicFigure,
     "news": News,
     "podcast": Podcast,
     "partial_fake": PartialFake,

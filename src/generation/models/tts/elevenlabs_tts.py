@@ -4,9 +4,9 @@ from .base import BaseTTS
 
 USE_CASE = {
     "news": "5Q0t7uMcjvnagumLfvZi", # Paul
-    "podcasts": "9BWtsMINqrJLrRacOk9x", # Aria
-    "phone_calls": "2EiwWnXFnvU5JabPnv8n", # Clyde
-    "public_speeches": "9BWtsMINqrJLrRacOk9x", # Aria
+    "podcast": "9BWtsMINqrJLrRacOk9x", # Aria
+    "phonecall": "2EiwWnXFnvU5JabPnv8n", # Clyde
+    "publicspeech": "9BWtsMINqrJLrRacOk9x", # Aria
 }
 
 class ElevenLabsTTS(BaseTTS):
