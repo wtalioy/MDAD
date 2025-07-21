@@ -13,11 +13,13 @@ class BaseRawDataset:
         self.sample_rate = kwargs.get('sample_rate', 16000)
         self.meta_path = os.path.join(self.data_dir, "meta.json")
 
-    def _try_generate_audio(self, item, tts_model, vc_model=None, **kwargs):
+    def _try_generate_audio(self, item, tts_model, vc_model=None, language: str = "en", **kwargs):
         """Try to generate audio with given models. Returns True if successful, False otherwise."""
         text = item['text']
-        audio_path = os.path.join(self.data_dir, item['audio']['real'])
-        output_path = audio_path.replace("audio/real", "audio/fake")
+        audio_rel_path = item['audio']['real']
+        output_rel_path = audio_rel_path.replace("audio/real", "audio/fake")
+        audio_path = os.path.join(self.data_dir, audio_rel_path)
+        output_path = os.path.join(self.data_dir, output_rel_path)
         item['audio']['fake'] = {}
         
         try:
@@ -33,21 +35,29 @@ class BaseRawDataset:
                 # TTS + VC
                 fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, **kwargs)
                 fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
+
+                # Convert the voice of the corresponding sample to that of the real audio
+                sample_path = f"src/generation/samples/{language}.wav"
+                temp_vc_path = output_path.replace(".wav", "_temp_vc.wav")
+                vc_model.convert(sample_path, audio_path, temp_vc_path)
                 
                 # Save TTS audio as temporary file
                 temp_tts_path = output_path.replace(".wav", "_temp_tts.wav")
                 sf.write(temp_tts_path, fake_audio, self.sample_rate)
                 
                 # Then perform voice conversion with VC
-                vc_model.convert(temp_tts_path, audio_path, output_path)
+                vc_model.convert(temp_tts_path, temp_vc_path, output_path)
                 
                 # Clean up temporary file
                 if os.path.exists(temp_tts_path):
                     os.remove(temp_tts_path)
+                if os.path.exists(temp_vc_path):
+                    os.remove(temp_vc_path)
+                    
                 model_name = f"{tts_model.model_name} + {vc_model.model_name}"
             
             logger.info(f"Generated audio at {output_path}")
-            item['audio']['fake'][model_name] = output_path
+            item['audio']['fake'][model_name] = output_rel_path
             return True
             
         except Exception as e:
@@ -56,7 +66,7 @@ class BaseRawDataset:
             logger.error(e)
             return False
 
-    def generate(self, tts_models: List[BaseTTS], vc_models: List[BaseVC] = [], *args, **kwargs):
+    def generate(self, tts_models: List[BaseTTS], vc_models: List[BaseVC] = [], language: str = "en", *args, **kwargs):
         output_dir = os.path.join(self.data_dir, "audio/fake")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -111,7 +121,7 @@ class BaseRawDataset:
                 else:
                     logger.info(f"Trying fallback combination {i+1}: {combo_name}")
                 
-                if self._try_generate_audio(item, tts_model, vc_model, **kwargs):
+                if self._try_generate_audio(item, tts_model, vc_model, language=language, **kwargs):
                     success = True
                     logger.info(f"Successfully generated audio for item {idx+1}")
                     break
