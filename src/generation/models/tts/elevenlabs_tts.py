@@ -7,6 +7,9 @@ USE_CASE = {
     "podcast": "9BWtsMINqrJLrRacOk9x", # Aria
     "phonecall": "2EiwWnXFnvU5JabPnv8n", # Clyde
     "publicspeech": "9BWtsMINqrJLrRacOk9x", # Aria
+    "movie": "EXAVITQu4vr4xnSDxMaL", # Sarah
+    "interview": "21m00Tcm4TlvDq8ikWAM", # Rachel
+    "phonecall": "CYw3kZ02Hs0563khs1Fj", # Dave
 }
 
 class ElevenLabsTTS(BaseTTS):
