@@ -1,3 +1,14 @@
+# Weights and checkpoints
+*.pth
+
+# IDE and Editor specific files
+.vscode/
+.cursor/
+.idea/
+
+# data files
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +216,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Audio files
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.aac
+*.wma
+*.webm
+*.opus
+*.m4b
