@@ -1,4 +1,4 @@
-from typing import Dict, Any, cast, List, Tuple
+from typing import Dict, Any, cast, List, Tuple, Optional
 import soundfile as sf
 import numpy as np
 from loguru import logger
@@ -22,7 +22,7 @@ finally:
 
 class ARDetect(Baseline):
     def __init__(self,
-                 wav2vec_model_path: str | None = None,
+                 wav2vec_model_path: Optional[str] = None,
                  mmd_model_path: str = "src/eval/baselines/ardetect/mmd.pth",
                  device: str = "cuda",
                  **kwargs):
