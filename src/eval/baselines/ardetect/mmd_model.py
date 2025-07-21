@@ -55,22 +55,8 @@ class mlp_meta(nn.Module):
 
 class Bert_Transformer_Layer(BertPreTrainedModel):
     def __init__(self, fusion_config):
-        # Ensure the config has the required fields
-        config_dict = {
-            "hidden_size": fusion_config.get("hidden_size", 768),
-            "num_hidden_layers": fusion_config.get("num_hidden_layers", 1),
-            "num_attention_heads": fusion_config.get("num_attention_heads", 4),
-            "output_attentions": fusion_config.get("output_attentions", True),
-            "output_hidden_states": fusion_config.get("output_hidden_states", False),
-            "return_dict": fusion_config.get("return_dict", False),
-            "intermediate_size": fusion_config.get("intermediate_size", fusion_config.get("hidden_size", 768) * 4),
-            "hidden_act": fusion_config.get("hidden_act", "gelu"),
-            "hidden_dropout_prob": fusion_config.get("hidden_dropout_prob", 0.1),
-            "attention_probs_dropout_prob": fusion_config.get("attention_probs_dropout_prob", 0.1),
-        }
-        
-        bertconfig_fusion = BertConfig(**config_dict)
-        super().__init__(bertconfig_fusion)
+        super().__init__(BertConfig(**fusion_config))
+        bertconfig_fusion = BertConfig(**fusion_config)
         self.encoder = BertEncoder(bertconfig_fusion)
         self.init_weights()
 
@@ -127,7 +113,7 @@ class Bert_Transformer_Layer(BertPreTrainedModel):
 @dataclass
 class MMDConfig:
     in_dim: int = 1920
-    hid_dim: int = 512
+    hid_dim: int = 2048
     out_dim: int = 300
     token_num: int = 31
     dropout: float = 0.2
