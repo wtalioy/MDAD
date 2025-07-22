@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from typing import List
+from tqdm import tqdm
 import json
 from baselines import Baseline
 from config import Label
@@ -15,11 +16,11 @@ class BaseDataset:
             meta = json.load(f)
         file_paths = []
         labels = []
-        for item in meta:
-            if hasattr(item['audio'], 'real'):
+        for item in tqdm(meta, desc="Loading dataset"):
+            if 'real' in item['audio']:
                 file_paths.append(os.path.join(self.data_dir, item['audio']['real']))
                 labels.append(Label.real.value)
-            if hasattr(item['audio'], 'fake'):
+            if 'fake' in item['audio']:
                 for fake_path in item['audio']['fake'].values():
                     file_paths.append(os.path.join(self.data_dir, fake_path))
                     labels.append(Label.fake.value)
