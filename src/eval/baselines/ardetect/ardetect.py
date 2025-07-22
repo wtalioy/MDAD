@@ -4,6 +4,7 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 import torch
+import torch.nn as nn
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 from sklearn.metrics import roc_curve
 from eval.baselines.base import Baseline
@@ -32,23 +33,40 @@ class ARDetect(Baseline):
         self.segment_sec = 0.625
         self.supported_metrics = ['eer']
 
+        # Check for multiple GPUs
+        self.num_gpus = torch.cuda.device_count() if device == "cuda" else 1
+        logger.info(f"Using {self.num_gpus} GPU(s)")
+
         self.extractor = Wav2Vec2FeatureExtractor.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
         self.model = Wav2Vec2Model.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
+        
+        # Enable multi-GPU support for Wav2Vec2 model
+        if self.num_gpus > 1:
+            self.model = nn.DataParallel(self.model)
         self.model = self.model.to(device).eval()
 
         self.net = ModelLoader.from_pretrained(model_path=mmd_model_path, device=device)
+        # Enable multi-GPU support for MMD model
+        if self.num_gpus > 1:
+            self.net = nn.DataParallel(self.net)
 
         self.real_data, self.fake_data = self._load_ref_data()
-        self.real_features = self._load_features(self.real_data)
-        self.fake_features = self._load_features(self.fake_data)
+        # Use larger batch size for multi-GPU
+        batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 1
+        logger.info(f"Loading real features with batch size {batch_size}")
+        self.real_features = self._load_features(self.real_data, batch_size=batch_size)
+        logger.info(f"Loading fake features with batch size {batch_size}")
+        self.fake_features = self._load_features(self.fake_data, batch_size=batch_size)
 
     def _load_ref_data(self):
         return self._load_asvspoof()
     
     def _load_features(self, audio_data: List[np.ndarray], batch_size: int = 8) -> List[torch.Tensor]:
         features = []
-        for i in tqdm(range(0, len(audio_data), batch_size), desc="Extracting features"):
-            batch_audio = audio_data[i:i + batch_size]
+        effective_batch_size = batch_size * self.num_gpus if self.num_gpus > 1 else batch_size
+        
+        for i in range(0, len(audio_data), effective_batch_size):
+            batch_audio = audio_data[i:i + effective_batch_size]
 
             batch_inputs = []
             for audio_array in batch_audio:
@@ -56,19 +74,31 @@ class ARDetect(Baseline):
                     audio_array,
                     sampling_rate=self.sample_rate,
                     padding="max_length",
-                    max_length=25000,
+                    max_length=12000,
                     truncation=True,
                     return_tensors="pt"
                 )
                 batch_inputs.append(inputs)
             
             if batch_inputs:
-                batch_features = []
-                for inputs in batch_inputs:
-                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                    outputs = self.model(**inputs)
-                    batch_features.append(outputs.last_hidden_state.cpu())
-                features.extend(batch_features)
+                # Stack inputs for batch processing
+                if len(batch_inputs) > 1:
+                    stacked_inputs = {}
+                    for key in batch_inputs[0].keys():
+                        stacked_inputs[key] = torch.cat([inp[key] for inp in batch_inputs], dim=0)
+                    stacked_inputs = {k: v.to(self.device) for k, v in stacked_inputs.items()}
+                    
+                    # Process entire batch at once
+                    with torch.no_grad():
+                        outputs = self.model(**stacked_inputs)
+                        batch_features = torch.split(outputs.last_hidden_state.cpu(), 1, dim=0)
+                        features.extend([feat.squeeze(0) for feat in batch_features])
+                else:
+                    # Single item processing
+                    inputs = {k: v.to(self.device) for k, v in batch_inputs[0].items()}
+                    with torch.no_grad():
+                        outputs = self.model(**inputs)
+                        features.append(outputs.last_hidden_state.cpu().squeeze(0))
         
         return features
 
@@ -98,7 +128,7 @@ class ARDetect(Baseline):
         for i in range(num_full_segments):
             start_frame = i * segment_length
             end_frame = start_frame + segment_length
-            audio_segments.append(audio[:, start_frame:end_frame])
+            audio_segments.append(audio[start_frame:end_frame])
 
         remaining_frames = total_frames % segment_length
 
@@ -108,23 +138,26 @@ class ARDetect(Baseline):
             else:
                 if len(audio_segments) >= 1:
                     last_segment = audio_segments.pop()
-                    combined_segment = np.concatenate((last_segment, audio[:, num_full_segments * segment_length:]), axis=1)
+                    combined_segment = np.concatenate((last_segment, audio[num_full_segments * segment_length:]), axis=0)
                     audio_segments.append(combined_segment)
                 else:
-                    audio_segments.append(audio[:, num_full_segments * segment_length:])
+                    audio_segments.append(audio[num_full_segments * segment_length:])
 
         return audio_segments
 
 
     def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str]) -> dict:
         feature_list = []
-        for audio_path in data:
+        # Use larger batch size for multi-GPU evaluation
+        batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 8
+        
+        for audio_path in tqdm(data, desc="Loading test data"):
             audio, sr = sf.read(audio_path)
             if sr != self.sample_rate:
                 import librosa
                 audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
             segments = self._segment_audio(audio)
-            feature_list.append(self._load_features(segments))
+            feature_list.append(self._load_features(segments, batch_size=batch_size))
         
         results = {}
         for metric in metrics:
@@ -138,8 +171,8 @@ class ARDetect(Baseline):
 
 
     def _evaluate_eer(self, feature_list: List[List[torch.Tensor]], labels: np.ndarray) -> float:
-        fea_real = feature_list[labels == Label.real.value]
-        fea_fake = feature_list[labels == Label.fake.value]
+        fea_real = [feature_list[i] for i in range(len(labels)) if labels[i] == Label.real.value]
+        fea_fake = [feature_list[i] for i in range(len(labels)) if labels[i] == Label.fake.value]
 
         real_test_stats = []
         generated_test_stats = []
@@ -190,20 +223,26 @@ class ARDetect(Baseline):
         t_list = []
 
         for _ in range(max(round, 1)):
-            fea_real = fea_real[torch.randperm(len(fea_real))[:min_len]]
-            fea_generated = fea_generated[torch.randperm(len(fea_generated))[:min_len]]
-            fea_test = fea_test[torch.randperm(len(fea_test))[:min_len]]
+            fea_real_sample = fea_real[torch.randperm(len(fea_real))[:min_len]]
+            fea_generated_sample = fea_generated[torch.randperm(len(fea_generated))[:min_len]]
+            fea_test_sample = fea_test[torch.randperm(len(fea_test))[:min_len]]
+
+            # Use the MMD network (potentially with DataParallel)
+            with torch.no_grad():
+                net_test = self.net(fea_test_sample)
+                net_real = self.net(fea_real_sample)
+                net_generated = self.net(fea_generated_sample)
 
             h_u, p_value, t = MMD_3_Sample_Test(
-                self.net(fea_test),
-                self.net(fea_real),
-                self.net(fea_generated),
-                fea_test.view(fea_test.shape[0], -1),
-                fea_real.view(fea_real.shape[0], -1),
-                fea_generated.view(fea_generated.shape[0], -1),
-                self.net.sigma,
-                self.net.sigma0_u,
-                self.net.ep,
+                net_test,
+                net_real,
+                net_generated,
+                fea_test_sample.view(fea_test_sample.shape[0], -1),
+                fea_real_sample.view(fea_real_sample.shape[0], -1),
+                fea_generated_sample.view(fea_generated_sample.shape[0], -1),
+                self.net.module.sigma if hasattr(self.net, 'module') else self.net.sigma,
+                self.net.module.sigma0_u if hasattr(self.net, 'module') else self.net.sigma0_u,
+                self.net.module.ep if hasattr(self.net, 'module') else self.net.ep,
                 0.05,
             )
         
