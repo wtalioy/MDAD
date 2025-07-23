@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from elevenlabs import ElevenLabs
 from .base import BaseTTS
 
@@ -13,10 +14,10 @@ USE_CASE = {
 }
 
 class ElevenLabsTTS(BaseTTS):
-    def __init__(self, api_key: str, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.model_name = "ElevenLabs"
         self.require_vc = True
-        self.client = ElevenLabs(api_key=api_key)
+        self.client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
     def get_voices(self):
         response = self.client.voices.search(include_total_count=True)
