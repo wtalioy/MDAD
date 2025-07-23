@@ -30,13 +30,13 @@ class BaseRawDataset:
             
             if vc_model is None:
                 # TTS only
-                fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, **kwargs)
+                fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, language=language, **kwargs)
                 fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
                 sf.write(output_path, fake_audio, self.sample_rate)
                 model_name = tts_model.model_name
             else:
                 # TTS + VC
-                fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, **kwargs)
+                fake_audio, sample_rate = tts_model.infer(text, language=language, **kwargs)
                 fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
 
                 # Convert the voice of the corresponding sample to that of the real audio
