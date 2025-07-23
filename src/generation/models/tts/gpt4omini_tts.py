@@ -9,7 +9,7 @@ class GPT4oMiniTTS(BaseTTS):
         self.model_name = "gpt-4o-mini-tts"
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    def infer(self, text: str, **kwargs) -> str:
+    def infer(self, text: str, **kwargs):
         binary_data = self.client.audio.speech.create(
             model=self.model_name,
             input=text,

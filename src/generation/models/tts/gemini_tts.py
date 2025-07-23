@@ -18,7 +18,7 @@ class GeminiTTS(BaseTTS):
         self.client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         self.model_name = "gemini-2.5-pro-preview-tts"
 
-    def infer(self, text: str, use_case: str, language: str = "en", **kwargs) -> str:
+    def infer(self, text: str, use_case: str, language: str = "en", **kwargs):
         response = self.client.models.generate_content(
             model=self.model_name,
             contents=f"Say this in {language}:\n\n{text}",
