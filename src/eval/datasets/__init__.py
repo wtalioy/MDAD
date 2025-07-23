@@ -9,6 +9,7 @@ from .phonecall import PhoneCall
 from .interview import Interview
 from .publicspeech import PublicSpeech
 from .movie import Movie
+from .emotional import Emotional
 
 DATASET_MAP = {
     "publicfigure": PublicFigure,
@@ -21,6 +22,7 @@ DATASET_MAP = {
     "interview": Interview,
     "publicspeech": PublicSpeech,
     "movie": Movie,
+    "emotional": Emotional,
 }
 
 __all__ = ["BaseDataset", "DATASET_MAP"]
