@@ -16,6 +16,7 @@ USE_CASE = {
 class GeminiTTS(BaseTTS):
     def __init__(self, *args, **kwargs):
         self.client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        self.require_vc = True
         self.model_name = "gemini-2.5-pro-preview-tts"
 
     def infer(self, text: str, use_case: str, language: str = "en", **kwargs):

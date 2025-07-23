@@ -7,6 +7,7 @@ from .base import BaseTTS
 class GPT4oMiniTTS(BaseTTS):
     def __init__(self, *args, **kwargs):
         self.model_name = "gpt-4o-mini-tts"
+        self.require_vc = True
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def infer(self, text: str, **kwargs):
