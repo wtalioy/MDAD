@@ -13,6 +13,9 @@ class BaseRawDataset:
         self.sample_rate = kwargs.get('sample_rate', 16000)
         self.meta_path = os.path.join(self.data_dir, "meta.json")
 
+        from datetime import datetime
+        logger.add(f"logs/generation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log", rotation="100 MB", retention="60 days")
+
     def _try_generate_audio(self, item, tts_model, vc_model=None, language: str = "en", **kwargs):
         """Try to generate audio with given models. Returns True if successful, False otherwise."""
         text = item['text']
