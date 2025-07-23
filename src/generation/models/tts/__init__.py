@@ -6,8 +6,8 @@ from .tacotron2 import Tacotron2
 from .bark import Bark
 from .melotts import MeloTTS
 from .elevenlabs_tts import ElevenLabsTTS
-from .geminitts import GeminiTTS
-from .gpt4omini import GPT4oMiniTTS
+from .gemini_tts import GeminiTTS
+from .gpt4omini_tts import GPT4oMiniTTS
 
 TTS_MODEL_MAP = {
     "vits": VITS,
