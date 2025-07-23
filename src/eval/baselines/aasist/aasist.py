@@ -1,8 +1,9 @@
 import torch
 import json
+import os
 import numpy as np
 import soundfile as sf
-from typing import List, Union, Tuple, Optional
+from typing import List, Tuple, Optional
 from torch.utils.data import DataLoader, Dataset
 from importlib import import_module
 from tqdm import tqdm
@@ -10,21 +11,21 @@ from eval.baselines.base import Baseline
 from eval.config import Label
 
 class AASIST(Baseline):
-    def __init__(self, config_path: str = "src/eval/baselines/aasist/config/AASIST.conf", device: str = "cuda", **kwargs):
+    def __init__(self, config: str = "AASIST-L.conf", device: str = "cuda", **kwargs):
         self.name = "AASIST"
         self.device = device
-        self.model = self._load_model(config_path, device)
+        self.model = self._load_model(os.path.join(os.path.dirname(__file__), "config", config), device)
         self.supported_metrics = ['eer', 'tdcf']
 
     def _load_model(self, config_path: str, device: str):
         with open(config_path, "r") as f_json:
             config = json.loads(f_json.read())
         model_config = config.get("model_config", {})
-        module = import_module("models.{}".format(model_config["architecture"]))
+        module = import_module("eval.baselines.aasist.models.{}".format(model_config["architecture"]))
         _model = getattr(module, "Model")
         model = _model(model_config).to(device)
         model.load_state_dict(
-            torch.load(config["model_path"], map_location=device))
+            torch.load(os.path.join(os.path.dirname(__file__), config["model_path"]), map_location=device))
         return model
 
     def _run_inference(self, data_loader: DataLoader) -> np.ndarray:
@@ -159,6 +160,7 @@ class AASIST(Baseline):
     def evaluate(self, data: List[str], metrics: List[str], 
                   labels: np.ndarray, 
                   asv_scores: Optional[dict] = None) -> dict:
+
         def pad_random(x: np.ndarray, max_len: int = 64600):
             x_len = x.shape[0]
             # if duration is already long enough
@@ -182,12 +184,12 @@ class AASIST(Baseline):
                 # Assuming data is a list of file paths or similar
                 x, _ = sf.read(self.paths[idx])
                 x_pad = pad_random(x)
-                x_inp = torch.tensor(x_pad)
+                x_inp = torch.tensor(x_pad, dtype=torch.float32)
                 return x_inp
 
         # Create DataLoader
         dataset = CustomDataset(data)
-        data_loader = DataLoader(dataset, batch_size=4, shuffle=True, drop_last=True, pin_memory=True)
+        data_loader = DataLoader(dataset, batch_size=4, pin_memory=True)
 
         # Run inference to get predictions
         scores = self._run_inference(data_loader)
@@ -211,7 +213,6 @@ class AASIST(Baseline):
             if m == 'eer':
                 eer, threshold = self.compute_eer(bonafide_scores, spoof_scores)
                 results['eer'] = float(eer)
-                results['eer_threshold'] = float(threshold)
                 
             elif m == 'tdcf':
                 # Use default ASV parameters if not provided
@@ -232,10 +233,9 @@ class AASIST(Baseline):
                     min_tDCF_index = np.argmin(tDCF_curve)
                     min_tDCF = tDCF_curve[min_tDCF_index]
                     
-                    results['min_tdcf'] = float(min_tDCF)
-                    results['tdcf_threshold'] = float(thresholds[min_tDCF_index])
+                    results['tdcf'] = float(min_tDCF)
                 except Exception as e:
                     print(f"Warning: Could not compute t-DCF: {e}")
-                    results['min_tdcf'] = None
+                    results['tdcf'] = None
         
         return results
