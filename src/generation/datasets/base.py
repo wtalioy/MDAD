@@ -5,12 +5,10 @@ import json
 from loguru import logger
 from tqdm import tqdm
 import soundfile as sf
-import librosa
 
 class BaseRawDataset:
     def __init__(self, data_dir: str, *args, **kwargs):
         self.data_dir = data_dir
-        self.sample_rate = kwargs.get('sample_rate', 16000)
         self.meta_path = os.path.join(self.data_dir, "meta.json")
 
         from datetime import datetime
@@ -31,13 +29,11 @@ class BaseRawDataset:
             if vc_model is None:
                 # TTS only
                 fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, language=language, **kwargs)
-                fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
-                sf.write(output_path, fake_audio, self.sample_rate)
+                sf.write(output_path, fake_audio, sample_rate)
                 model_name = tts_model.model_name
             else:
                 # TTS + VC
                 fake_audio, sample_rate = tts_model.infer(text, language=language, **kwargs)
-                fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
 
                 # Convert the voice of the corresponding sample to that of the real audio
                 sample_path = f"src/generation/samples/{language}.wav"
@@ -46,7 +42,7 @@ class BaseRawDataset:
                 
                 # Save TTS audio as temporary file
                 temp_tts_path = output_path.replace(".wav", "_temp_tts.wav")
-                sf.write(temp_tts_path, fake_audio, self.sample_rate)
+                sf.write(temp_tts_path, fake_audio, sample_rate)
                 
                 # Then perform voice conversion with VC
                 vc_model.convert(temp_tts_path, temp_vc_path, output_path)
