@@ -7,7 +7,7 @@ from typing import List, Tuple, Optional
 from torch.utils.data import DataLoader, Dataset
 from importlib import import_module
 from tqdm import tqdm
-from eval.baselines.base import Baseline
+from eval.baselines import Baseline
 from eval.config import Label
 
 class AASIST(Baseline):

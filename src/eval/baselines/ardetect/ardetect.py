@@ -1,4 +1,5 @@
 from typing import Dict, Any, cast, List, Tuple, Optional
+import os
 import soundfile as sf
 import numpy as np
 from loguru import logger
@@ -7,7 +8,7 @@ import torch
 import torch.nn as nn
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 from sklearn.metrics import roc_curve
-from eval.baselines.base import Baseline
+from eval.baselines import Baseline
 from eval.baselines.ardetect.mmd_model import ModelLoader
 from eval.baselines.ardetect.mmd_utils import MMD_3_Sample_Test
 from eval.config import Label
@@ -23,11 +24,12 @@ finally:
 
 class ARDetect(Baseline):
     def __init__(self,
-                 wav2vec_model_path: Optional[str] = None,
                  mmd_model_path: str = "src/eval/baselines/ardetect/mmd.pth",
                  device: str = "cuda",
                  **kwargs):
         self.name = "ARDetect"
+        self.cache_dir = "cache"
+        os.makedirs(self.cache_dir, exist_ok=True)
         self.device = device
         self.sample_rate = 16000
         self.segment_sec = 0.625
@@ -37,8 +39,8 @@ class ARDetect(Baseline):
         self.num_gpus = torch.cuda.device_count() if device == "cuda" else 1
         logger.info(f"Using {self.num_gpus} GPU(s)")
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
-        self.model = Wav2Vec2Model.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-xls-r-2b")
+        self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-xls-r-2b")
         
         # Enable multi-GPU support for Wav2Vec2 model
         if self.num_gpus > 1:
@@ -48,15 +50,26 @@ class ARDetect(Baseline):
         self.net = ModelLoader.from_pretrained(model_path=mmd_model_path, device=device)
         # Enable multi-GPU support for MMD model
         if self.num_gpus > 1:
-            self.net = nn.DataParallel(self.net)
+            self.net.model = nn.DataParallel(self.net.model)
 
         self.real_data, self.fake_data = self._load_ref_data()
-        # Use larger batch size for multi-GPU
+        self.real_features, self.fake_features = self._load_ref_features()
+
+    def _load_ref_features(self) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 1
         logger.info(f"Loading real features with batch size {batch_size}")
-        self.real_features = self._load_features(self.real_data, batch_size=batch_size)
+        if not os.path.exists(os.path.join(self.cache_dir, "real_ref_features.pt")):
+            real_features = self._load_features(self.real_data, batch_size=batch_size)
+            torch.save(real_features, os.path.join(self.cache_dir, "real_ref_features.pt"))
+        else:
+            real_features = torch.load(os.path.join(self.cache_dir, "real_ref_features.pt"))
         logger.info(f"Loading fake features with batch size {batch_size}")
-        self.fake_features = self._load_features(self.fake_data, batch_size=batch_size)
+        if not os.path.exists(os.path.join(self.cache_dir, "fake_ref_features.pt")):
+            fake_features = self._load_features(self.fake_data, batch_size=batch_size)
+            torch.save(fake_features, os.path.join(self.cache_dir, "fake_ref_features.pt"))
+        else:
+            fake_features = torch.load(os.path.join(self.cache_dir, "fake_ref_features.pt"))
+        return real_features, fake_features
 
     def _load_ref_data(self):
         return self._load_asvspoof()
