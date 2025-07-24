@@ -1,5 +1,5 @@
 from enum import Enum
 
 class Label(Enum):
-    fake = 0
-    real = 1
+    real = 0
+    fake = 1
