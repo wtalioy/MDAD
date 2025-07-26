@@ -7,26 +7,24 @@ from typing import List, Tuple, Optional
 from torch.utils.data import DataLoader, Dataset
 from importlib import import_module
 from tqdm import tqdm
-from eval.baselines import Baseline
-from eval.config import Label
+from baselines import Baseline
+from config import Label
 
-class AASIST(Baseline):
-    def __init__(self, config: str = "AASIST-L.conf", device: str = "cuda", **kwargs):
-        self.name = "AASIST"
+class AASIST_Base(Baseline):
+    def __init__(self, config: str = "AASIST.conf", device: str = "cuda", **kwargs):
         self.device = device
-        self.model = self._load_model(os.path.join(os.path.dirname(__file__), "config", config), device)
+        self.model, self.default_ckpt = self._load_model(os.path.join(os.path.dirname(__file__), "config", config), device)
         self.supported_metrics = ['eer', 'tdcf']
 
     def _load_model(self, config_path: str, device: str):
         with open(config_path, "r") as f_json:
             config = json.loads(f_json.read())
         model_config = config.get("model_config", {})
-        module = import_module("eval.baselines.aasist.models.{}".format(model_config["architecture"]))
+        module = import_module("baselines.aasist.models.{}".format(model_config["architecture"]))
         _model = getattr(module, "Model")
         model = _model(model_config).to(device)
-        model.load_state_dict(
-            torch.load(os.path.join(os.path.dirname(__file__), config["model_path"]), map_location=device))
-        return model
+        default_ckpt = os.path.join(os.path.dirname(__file__), config["model_path"])
+        return model, default_ckpt
 
     def _run_inference(self, data_loader: DataLoader) -> np.ndarray:
         """
@@ -159,7 +157,9 @@ class AASIST(Baseline):
 
     def evaluate(self, data: List[str], metrics: List[str], 
                   labels: np.ndarray, 
-                  asv_scores: Optional[dict] = None) -> dict:
+                  asv_scores: Optional[dict] = None,
+                  ckpt_path: Optional[str] = None) -> dict:
+        self.model.load_state_dict(torch.load(ckpt_path or self.default_ckpt))
 
         def pad_random(x: np.ndarray, max_len: int = 64600):
             x_len = x.shape[0]
@@ -239,3 +239,11 @@ class AASIST(Baseline):
                     results['tdcf'] = None
         
         return results
+
+class AASIST(AASIST_Base):
+    def __init__(self, device: str = "cuda", **kwargs):
+        super().__init__("AASIST.conf", device, **kwargs)
+
+class AASIST_L(AASIST_Base):
+    def __init__(self, device: str = "cuda", **kwargs):
+        super().__init__("AASIST-L.conf", device, **kwargs)
