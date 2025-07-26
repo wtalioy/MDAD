@@ -189,7 +189,7 @@ class AASIST_Base(Baseline):
 
         # Create DataLoader
         dataset = CustomDataset(data)
-        data_loader = DataLoader(dataset, batch_size=4, pin_memory=True)
+        data_loader = DataLoader(dataset, batch_size=16, pin_memory=True)
 
         # Run inference to get predictions
         scores = self._run_inference(data_loader)
