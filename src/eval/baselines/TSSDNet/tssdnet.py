@@ -27,8 +27,11 @@ class TSSDNet_Base(Baseline):
         model.to(self.device)
         return model
 
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], ckpt_path: Optional[str] = None) -> dict:
-        self.model.load_state_dict(torch.load(ckpt_path or self.default_ckpt)["model_state_dict"])
+    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+        if in_domain:
+            self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
+        else:
+            self.model.load_state_dict(torch.load(self.default_ckpt)["model_state_dict"])
         self.model.eval()
 
         def pad(x, max_len=64600):

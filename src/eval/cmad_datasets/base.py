@@ -33,18 +33,19 @@ class BaseDataset:
             split_labels[split] = np.array(labels)
         return split_data, split_labels
 
-    def evaluate(self, baseline: Baseline, metrics: List[str], ckpt_path: Optional[str] = None) -> dict:
+    def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
         """
         Evaluate the dataset using a baseline model and specified metrics.
         
         Args:
             baseline: The baseline model to use for evaluation
             metrics: Metric(s) to evaluate
+            in_domain: Whether the evaluation is in-domain
             
         Returns:
             Dictionary containing evaluation results
         """
-        return baseline.evaluate(data=self.data['test'], labels=self.labels['test'], metrics=metrics, ckpt_path=ckpt_path)
+        return baseline.evaluate(data=self.data['test'], labels=self.labels['test'], metrics=metrics, in_domain=in_domain, dataset_name=self.name)
 
     def train(self, baseline: Baseline) -> str:
         """

@@ -1,4 +1,4 @@
-from typing import Dict, Any, cast, List, Tuple
+from typing import Dict, Any, cast, List, Tuple, Optional
 import os
 import soundfile as sf
 import numpy as np
@@ -150,7 +150,7 @@ class ARDetect(Baseline):
 
 
     @torch.no_grad()
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str]) -> dict:
+    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         feature_list = []
         # Use larger batch size for multi-GPU evaluation
         batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 8

@@ -155,11 +155,11 @@ class AASIST_Base(Baseline):
 
         return tDCF_norm, CM_thresholds
 
-    def evaluate(self, data: List[str], metrics: List[str], 
-                  labels: np.ndarray, 
-                  asv_scores: Optional[dict] = None,
-                  ckpt_path: Optional[str] = None) -> dict:
-        self.model.load_state_dict(torch.load(ckpt_path or self.default_ckpt))
+    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+        if in_domain:
+            self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
+        else:
+            self.model.load_state_dict(torch.load(self.default_ckpt))
 
         def pad_random(x: np.ndarray, max_len: int = 64600):
             x_len = x.shape[0]
@@ -211,7 +211,7 @@ class AASIST_Base(Baseline):
                 raise ValueError(f"Unsupported metric: {m}")
             
             if m == 'eer':
-                eer, threshold = self.compute_eer(bonafide_scores, spoof_scores)
+                eer, _ = self.compute_eer(bonafide_scores, spoof_scores)
                 results['eer'] = float(eer)
                 
             elif m == 'tdcf':
@@ -219,11 +219,6 @@ class AASIST_Base(Baseline):
                 Pfa_asv = 0.01
                 Pmiss_asv = 0.01
                 Pmiss_spoof_asv = None
-                
-                if asv_scores is not None:
-                    Pfa_asv = asv_scores.get('Pfa_asv', Pfa_asv)
-                    Pmiss_asv = asv_scores.get('Pmiss_asv', Pmiss_asv)
-                    Pmiss_spoof_asv = asv_scores.get('Pmiss_spoof_asv', Pmiss_spoof_asv)
                 
                 try:
                     tDCF_curve, thresholds = self.compute_tDCF(
