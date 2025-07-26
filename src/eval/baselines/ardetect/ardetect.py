@@ -1,4 +1,4 @@
-from typing import Dict, Any, cast, List, Tuple, Optional
+from typing import Dict, Any, cast, List, Tuple
 import os
 import soundfile as sf
 import numpy as np
@@ -7,20 +7,11 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
+from datasets import load_dataset
 from sklearn.metrics import roc_curve
 from baselines import Baseline
 from baselines.ardetect.mmd_model import ModelLoader
 from baselines.ardetect.mmd_utils import MMD_3_Sample_Test
-from config import Label
-
-# Fix datasets import conflict by temporarily modifying sys.path
-import sys
-_original_path = sys.path.copy()
-sys.path = [p for p in sys.path if not (p.endswith('src') or p.endswith('src/eval'))]
-try:
-    from datasets import load_dataset as hf_load_dataset
-finally:
-    sys.path = _original_path
 
 class ARDetect(Baseline):
     def __init__(self,
@@ -118,7 +109,7 @@ class ARDetect(Baseline):
     def _load_asvspoof(self, limit: int = 1024) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         real_data = []
         fake_data = []
-        data = hf_load_dataset("Bisher/ASVspoof_2019_LA", split="train")
+        data = load_dataset("Bisher/ASVspoof_2019_LA", split="train")
         for item in data:
             item = cast(Dict[str, Any], item)
             if item["key"] == 0 and len(real_data) < limit:
@@ -183,36 +174,13 @@ class ARDetect(Baseline):
 
 
     def _evaluate_eer(self, feature_list: List[List[torch.Tensor]], labels: np.ndarray) -> float:
-        fea_real = [feature_list[i] for i in range(len(labels)) if labels[i] == Label.real.value]
-        fea_fake = [feature_list[i] for i in range(len(labels)) if labels[i] == Label.fake.value]
+        scores = []
+        for fea_test in tqdm(feature_list, desc="Evaluating EER"):
+            score = self._three_sample_test(fea_test, round=10)
+            scores.append(score)
 
-        real_test_stats = []
-        generated_test_stats = []
-        
-        # For real test samples: compute test statistics against training distributions
-        for fea_test_real in fea_real:
-            stats = self._three_sample_test(fea_test_real, round=10)
-            real_test_stats.append(stats)
-        
-        # For generated test samples: compute test statistics against training distributions  
-        for fea_test_generated in fea_fake:
-            stats = self._three_sample_test(fea_test_generated, round=10)
-            generated_test_stats.append(stats)
-        
-        # Convert to numpy arrays for EER calculation
-        real_test_stats = np.array(real_test_stats)
-        generated_test_stats = np.array(generated_test_stats)
-        
-        # Remove any NaN values
-        real_test_stats = real_test_stats[~np.isnan(real_test_stats)]
-        generated_test_stats = generated_test_stats[~np.isnan(generated_test_stats)]
-        
-        if len(real_test_stats) == 0 or len(generated_test_stats) == 0:
-            logger.warning("No valid test statistics computed for EER calculation")
-            return 0.5
-        
-        # Compute EER using the test statistics
-        eer, eer_threshold = self._compute_eer(real_test_stats, generated_test_stats)
+        scores = np.array(scores)
+        eer, _ = self._compute_eer(scores, labels)
         
         return float(eer)
 
@@ -266,7 +234,7 @@ class ARDetect(Baseline):
         return power
 
 
-    def _compute_eer(self, target_scores: np.ndarray, nontarget_scores: np.ndarray) -> Tuple[Any, Any]:
+    def _compute_eer(self, scores: np.ndarray, labels: np.ndarray) -> Tuple[Any, Any]:
         """
         Compute Equal Error Rate (EER) from target and nontarget scores.
         Args:
@@ -276,9 +244,6 @@ class ARDetect(Baseline):
             eer: Equal Error Rate (EER) value
             eer_threshold: Threshold at which EER occurs
         """
-        scores = np.concatenate([target_scores, nontarget_scores])
-        labels = np.concatenate([np.zeros(len(target_scores)), np.ones(len(nontarget_scores))])
-
         fpr, tpr, thresholds = roc_curve(labels, scores)
         fnr = 1 - tpr
 
