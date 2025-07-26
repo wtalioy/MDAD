@@ -8,10 +8,10 @@ import torch
 import torch.nn as nn
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 from sklearn.metrics import roc_curve
-from eval.baselines import Baseline
-from eval.baselines.ardetect.mmd_model import ModelLoader
-from eval.baselines.ardetect.mmd_utils import MMD_3_Sample_Test
-from eval.config import Label
+from baselines import Baseline
+from baselines.ardetect.mmd_model import ModelLoader
+from baselines.ardetect.mmd_utils import MMD_3_Sample_Test
+from config import Label
 
 # Fix datasets import conflict by temporarily modifying sys.path
 import sys
@@ -27,8 +27,7 @@ class ARDetect(Baseline):
                  mmd_model_path: str = "src/eval/baselines/ardetect/mmd.pth",
                  device: str = "cuda",
                  **kwargs):
-        self.name = "ARDetect"
-        self.cache_dir = "cache"
+        self.cache_dir = os.path.join(os.path.dirname(__file__), "cache")
         os.makedirs(self.cache_dir, exist_ok=True)
         self.device = device
         self.sample_rate = 16000
