@@ -149,6 +149,7 @@ class ARDetect(Baseline):
         return audio_segments
 
 
+    @torch.no_grad()
     def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str]) -> dict:
         feature_list = []
         # Use larger batch size for multi-GPU evaluation
