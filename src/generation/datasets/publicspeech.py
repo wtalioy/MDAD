@@ -7,4 +7,4 @@ class PublicSpeech(BaseRawDataset):
         super().__init__(data_dir or "data/PublicSpeech", *args, **kwargs)
 
     def generate(self, tts_models: List[BaseTTS], vc_models: List[BaseVC] = [], *args, **kwargs):
-        super().generate(tts_models, language="en", use_case="publicspeech", *args, **kwargs)
+        super().generate(tts_models, vc_models, language="en", use_case="publicspeech", *args, **kwargs)
