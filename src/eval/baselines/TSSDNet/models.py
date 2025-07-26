@@ -86,7 +86,6 @@ class SSDNet1D(nn.Module):  # Res-TSSDNet
         x = F.max_pool1d(x, kernel_size=4)
         x = self.RSM4(x)
         x = F.max_pool1d(x, kernel_size=x.shape[-1])
-        # x = F.max_pool1d(x, kernel_size=375)
 
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.fc1(x))
@@ -123,8 +122,7 @@ class SSDNet2D(nn.Module):  # 2D-Res-TSSDNet
         x = F.max_pool2d(x, kernel_size=2)
         x = self.RSM4(x)
 
-        # x = F.avg_pool2d(x, kernel_size=(x.shape[-2], x.shape[-1]))
-        x = F.avg_pool2d(x, kernel_size=(27, 25))
+        x = F.avg_pool2d(x, kernel_size=(x.shape[-2], x.shape[-1]))
 
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.fc1(x))
@@ -178,8 +176,7 @@ class DilatedNet(nn.Module):  # Inc-TSSDNet
         x = F.max_pool1d(self.DCM1(x), kernel_size=4)
         x = F.max_pool1d(self.DCM2(x), kernel_size=4)
         x = F.max_pool1d(self.DCM3(x), kernel_size=4)
-        # x = F.max_pool1d(self.DCM4(x), kernel_size=x.shape[-1])
-        x = F.max_pool1d(self.DCM4(x), kernel_size=375)
+        x = F.max_pool1d(self.DCM4(x), kernel_size=x.shape[-1])
 
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.fc1(x))
