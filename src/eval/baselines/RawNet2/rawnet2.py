@@ -8,26 +8,39 @@ from tqdm import tqdm
 from loguru import logger
 from typing import List, Optional
 import numpy as np
-import soundfile as sf
+import librosa
 import os
 
+import yaml
+
 from baselines.RawNet2.model import RawNet as RawNetModel
-from baselines.RawNet2.parser import get_args
 from baselines.RawNet2.utils import *
 
 from baselines import Baseline
 
 class RawNet2(Baseline):
-    def __init__(self, config: str = "config.yaml", device: str = "cuda", **kwargs):
-        self.args = get_args(config)
+    def __init__(self, device: str = "cuda", **kwargs):
         self.device = device
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "asvspoof2019_LA.pth")
-        self.model = RawNetModel(self.args.model, device).to(device)
+        model_args = self._load_model_config()
+        self.model = RawNetModel(model_args, device).to(device)
         
         self.supported_metrics = ["eer"]
 
-    def _init_train(self):
-        if self.args.multi_gpu:
+    def _load_model_config(self) -> dict:
+        config_path = os.path.join(os.path.dirname(__file__), "config", "model.yaml")
+        with open(config_path, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        return config
+
+    def _load_train_config(self, dataset_name: str) -> dict:
+        config_path = os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml")
+        with open(config_path, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        return config
+
+    def _init_train(self, args: dict):
+        if args['multi_gpu']:
             self.model_to_save = self.model
             self.model = nn.DataParallel(self.model_to_save).to(self.device)
         else:
@@ -50,12 +63,12 @@ class RawNet2(Baseline):
                 0
             },
         ]
-        if self.args.optimizer.lower() == 'sgd':
-            self.optimizer = torch.optim.SGD(params, lr=self.args.lr, weight_decay=self.args.wd)
-        elif self.args.optimizer.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(params, lr=self.args.lr, weight_decay=self.args.wd, amsgrad=self.args.amsgrad)
+        if args['optimizer'].lower() == 'sgd':
+            self.optimizer = torch.optim.SGD(params, lr=args['lr'], weight_decay=args['wd'])
+        elif args['optimizer'].lower() == 'adam':
+            self.optimizer = torch.optim.Adam(params, lr=args['lr'], weight_decay=args['wd'], amsgrad=args['amsgrad'])
         else:
-            raise ValueError(f"Optimizer {self.args.optimizer} not supported")
+            raise ValueError(f"Optimizer {args['optimizer']} not supported")
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda = lambda step: keras_lr_decay(step))
 
     def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
@@ -76,7 +89,7 @@ class RawNet2(Baseline):
                 return len(self.paths)
             def __getitem__(self, idx):
                 path = self.paths[idx]
-                X, _ = sf.read(path) 
+                X, _ = librosa.load(path, sr=None)
                 X_pad = pad(X)
                 x_inp= torch.from_numpy(X_pad).float()
                 y = self.labels[idx]
@@ -118,16 +131,20 @@ class RawNet2(Baseline):
         return float(eer)
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
-        log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
-        logger.info(f"Training RawNet2 on {dataset_name}")
-        self._init_train()
-        best_eer = 100
-        best_epoch = 0
+        args = self._load_train_config(dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels)
         eval_loader = self._prepare_loader(eval_data, eval_labels)
+
+        log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
+        logger.info(f"Training RawNet2 on {dataset_name}")
+
+        self._init_train(args)
+
+        best_eer = 100
+        best_epoch = 0
         save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        for epoch in range(self.args.epoch):
+        for epoch in range(args['epoch']):
             self._train_epoch(epoch, train_loader)
             eer = self._evaluate_eer(eval_loader)
             logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
@@ -136,6 +153,7 @@ class RawNet2(Baseline):
                 best_epoch = epoch
                 torch.save(self.model_to_save.state_dict(), save_path)
                 logger.info(f"New best EER: {100*best_eer:.2f}% at epoch {epoch}")
+
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
         self.model = self.model_to_save
