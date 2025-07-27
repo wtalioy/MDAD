@@ -10,6 +10,7 @@ from .interview import Interview
 from .publicspeech import PublicSpeech
 from .movie import Movie
 from .emotional import Emotional
+from .asvspoof2021 import ASVspoof2021
 
 DATASET_MAP = {
     "publicfigure": PublicFigure,
@@ -23,6 +24,7 @@ DATASET_MAP = {
     "publicspeech": PublicSpeech,
     "movie": Movie,
     "emotional": Emotional,
+    "asvspoof2021": ASVspoof2021,
 }
 
 __all__ = ["BaseDataset", "DATASET_MAP"]
