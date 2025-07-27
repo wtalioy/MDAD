@@ -21,7 +21,7 @@ class BaseDataset:
                 meta = json.load(f)
             file_paths = []
             labels = []
-            for item in tqdm(meta, desc="Loading dataset"):
+            for item in tqdm(meta, desc=f"Loading {split} split"):
                 if 'real' in item['audio']:
                     file_paths.append(os.path.join(self.data_dir, item['audio']['real']))
                     labels.append(Label.real.value)
