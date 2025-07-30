@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from typing import List, Optional
+from typing import List
 from tqdm import tqdm
 import json
 from baselines import Baseline

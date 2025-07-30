@@ -5,6 +5,7 @@ from .movie import Movie
 from .phonecall import PhoneCall
 from .interview import Interview
 from .publicspeech import PublicSpeech
+from .partialfake import PartialFake
 
 RAWDATASET_MAP = {
     "news": News,
@@ -13,6 +14,7 @@ RAWDATASET_MAP = {
     "phonecall": PhoneCall,
     "interview": Interview,
     "publicspeech": PublicSpeech,
+    "partialfake": PartialFake,
 }
 
 __all__ = ["BaseRawDataset", "RAWDATASET_MAP"]
