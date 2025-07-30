@@ -1,0 +1,7 @@
+num_epoch: 300
+lr: 0.0001
+loss: "WCE"
+optimizer: "Adam"
+weight_decay: 0.0001
+amsgrad: 1
+multi_gpu: true

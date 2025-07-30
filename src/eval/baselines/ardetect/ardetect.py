@@ -1,6 +1,6 @@
 from typing import Dict, Any, cast, List, Tuple, Optional
 import os
-import soundfile as sf
+import librosa
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
@@ -156,10 +156,7 @@ class ARDetect(Baseline):
         batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 8
         
         for audio_path in tqdm(data, desc="Loading test data"):
-            audio, sr = sf.read(audio_path)
-            if sr != self.sample_rate:
-                import librosa
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
+            audio, _ = librosa.load(audio_path, sr=self.sample_rate)
             segments = self._segment_audio(audio)
             feature_list.append(self._load_features(segments, batch_size=batch_size))
         

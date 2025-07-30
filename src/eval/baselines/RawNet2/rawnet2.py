@@ -10,13 +10,14 @@ from typing import List, Optional
 import numpy as np
 import librosa
 import os
-
+import shutil
 import yaml
 
 from baselines.RawNet2.model import RawNet as RawNetModel
 from baselines.RawNet2.utils import *
 
 from baselines import Baseline
+from config import Label
 
 class RawNet2(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
@@ -35,6 +36,9 @@ class RawNet2(Baseline):
 
     def _load_train_config(self, dataset_name: str) -> dict:
         config_path = os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml")
+        if not os.path.exists(config_path):
+            config_path = os.path.join(os.path.dirname(__file__), "config", "train_default.yaml")
+            shutil.copy(config_path, os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml"))
         with open(config_path, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
@@ -69,7 +73,6 @@ class RawNet2(Baseline):
             self.optimizer = torch.optim.Adam(params, lr=args['lr'], weight_decay=args['wd'], amsgrad=args['amsgrad'])
         else:
             raise ValueError(f"Optimizer {args['optimizer']} not supported")
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda = lambda step: keras_lr_decay(step))
 
     def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
         def pad(x, max_len=64600):
@@ -82,7 +85,7 @@ class RawNet2(Baseline):
             return padded_x
 
         class CustomDataset(Dataset):
-            def __init__(self, data):
+            def __init__(self, data, labels):
                 self.paths = data
                 self.labels = labels
             def __len__(self):
@@ -95,16 +98,17 @@ class RawNet2(Baseline):
                 y = self.labels[idx]
                 return x_inp, y
 
-        dataset = CustomDataset(data)
+        dataset = CustomDataset(data, labels)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
         return loader
 
     def _train_epoch(self, epoch: int, train_loader: DataLoader):
         self.model.train()
-        with tqdm(total = len(train_loader), ncols = 70, desc="Training") as pbar:
+        with tqdm(total = len(train_loader), desc="Training") as pbar:
             for batch, label in train_loader:
                 batch, label = batch.to(self.device), label.to(self.device)
-                output = self.model(batch, label)
+                label = label.view(-1).type(torch.int64)
+                output = self.model(batch)
                 cce_loss = self.criterion(output, label)
                 loss = cce_loss
                 self.optimizer.zero_grad()
@@ -112,14 +116,13 @@ class RawNet2(Baseline):
                 self.optimizer.step()
                 pbar.set_description('epoch: %d, cce:%.3f'%(epoch, cce_loss))
                 pbar.update(1)
-                self.scheduler.step()
 
     @torch.no_grad()
     def _evaluate_eer(self, eval_loader: DataLoader) -> float:
         self.model.eval()
         scores = []
         labels = []
-        with tqdm(total = len(eval_loader), ncols = 70, desc="Evaluating EER") as pbar:
+        with tqdm(total = len(eval_loader), desc="Evaluating EER") as pbar:
             for batch, label in eval_loader:
                 batch = batch.to(self.device)
                 code = self.model(batch)
@@ -163,6 +166,8 @@ class RawNet2(Baseline):
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt))
+            if Label.real.value == 0:
+                labels = 1 - labels
         eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False)
         
         results = {}

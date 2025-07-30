@@ -1,10 +1,12 @@
 import os
 import argparse
+import warnings
 from loguru import logger
 from baselines import BASELINE_MAP
 from cmad_datasets import DATASET_MAP
 
 def main(args):
+    warnings.filterwarnings("ignore")
     os.makedirs("logs", exist_ok=True)
     log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
     logger.info(f"Evaluating {args.baseline} on {args.dataset} with metrics: {args.metrics} in {args.mode} mode")
@@ -33,9 +35,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
-    parser.add_argument("--baseline", type=str, default="rawnet2", help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
+    parser.add_argument("--baseline", type=str, default="rawgat-st", help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
     parser.add_argument("--dataset", type=str, default="audiobook", help="Name of the dataset", choices=list(DATASET_MAP.keys()))
-    parser.add_argument("--subset", type=str, default="en", help="Subset of the dataset", choices=["en", "zh-cn"])
+    parser.add_argument("--subset", type=str, default="DF", help="Subset of the dataset")
     parser.add_argument("--mode", type=str, default="in-domain", help="Mode of the evaluation", choices=["cross-domain", "in-domain"])
     parser.add_argument("--train_only", action="store_true", help="Train the baseline only")
     parser.add_argument("--eval_only", action="store_true", help="Evaluate the baseline only")
