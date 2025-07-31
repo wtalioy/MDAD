@@ -1,10 +1,59 @@
+import shutil
 from typing import List, Optional
+import librosa
 import numpy as np
+import os
+import torch
+from torch.utils.data import Dataset, DataLoader
+import yaml
 
 class Baseline:
     def __init__(self, device: str = "cuda", **kwargs):
         self.device = device
         self.supported_metrics = ["eer"]
+
+    def _load_model_config(self) -> dict:
+        config_path = os.path.join(os.path.dirname(__file__), "config", "model.yaml")
+        with open(config_path, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        return config
+
+    def _load_train_config(self, dataset_name: str) -> dict:
+        config_path = os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml")
+        if not os.path.exists(config_path):
+            config_path = os.path.join(os.path.dirname(__file__), "config", "train_default.yaml")
+            shutil.copy(config_path, os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml"))
+        with open(config_path, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        return config
+
+    def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
+        def pad(x, max_len=64600):
+            x_len = x.shape[0]
+            if x_len >= max_len:
+                return x[:max_len]
+            # need to pad
+            num_repeats = int(max_len / x_len) + 1
+            padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
+            return padded_x
+
+        class CustomDataset(Dataset):
+            def __init__(self, data, labels):
+                self.paths = data
+                self.labels = labels
+            def __len__(self):
+                return len(self.paths)
+            def __getitem__(self, idx):
+                path = self.paths[idx]
+                X, _ = librosa.load(path, sr=None)
+                X_pad = pad(X)
+                x_inp= torch.from_numpy(X_pad).float()
+                y = self.labels[idx]
+                return x_inp, y
+
+        dataset = CustomDataset(data, labels)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
+        return loader
 
     def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], ckpt_path: Optional[str] = None) -> dict:
         raise NotImplementedError("This method should be overridden by subclasses.")

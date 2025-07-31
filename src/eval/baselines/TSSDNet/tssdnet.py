@@ -1,23 +1,19 @@
 import os
-import shutil
 import torch
-import librosa
 from typing import List, Optional
-from torch.utils.data import Dataset
 from torch.utils.data.dataloader import DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
-import yaml
 from baselines.TSSDNet.models import SSDNet1D, DilatedNet
 from baselines import Baseline
 from config import Label
 
 class TSSDNet_Base(Baseline):
     def __init__(self, ckpt: str = "Res-TSSDNet", device: str = "cuda", **kwargs):
-        self.device = device
+        super().__init__(device, **kwargs)
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{ckpt}.pth")
         self.model = self._load_model(ckpt)
         self.supported_metrics = ["eer", "acc"]
@@ -32,48 +28,10 @@ class TSSDNet_Base(Baseline):
         model.to(self.device)
         return model
 
-    def _load_train_config(self, dataset_name: str) -> dict:
-        config_path = os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml")
-        if not os.path.exists(config_path):
-            config_path = os.path.join(os.path.dirname(__file__), "config", "train_default.yaml")
-            shutil.copy(config_path, os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml"))
-        with open(config_path, "r") as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        return config
-
     def _init_train(self, args: dict):
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args["lr"])
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.95)
-
-    def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 16, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
-        def pad(x, max_len=64600):
-            x_len = x.shape[0]
-            if x_len >= max_len:
-                return x[:max_len]
-            # need to pad
-            num_repeats = int(max_len / x_len) + 1
-            padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
-            return padded_x
-
-        class CustomDataset(Dataset):
-            def __init__(self, data, labels):
-                self.paths = data
-                self.labels = labels
-
-            def __len__(self):
-                return len(self.paths)
-
-            def __getitem__(self, idx):
-                x, _ = librosa.load(self.paths[idx], sr=None)
-                x = pad(x)
-                x = torch.from_numpy(x).float().unsqueeze(0)
-                y = self.labels[idx]
-                return x, y
-
-        dataset = CustomDataset(data, labels)
-        data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
-        return data_loader
 
     def _train_epoch(self, epoch: int, train_loader: DataLoader, loss_type: str = "WCE"):
         self.model.train()
@@ -133,7 +91,7 @@ class TSSDNet_Base(Baseline):
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt)["model_state_dict"])
-            if Label.real.value == 1:
+            if Label.real != 0:
                 labels = 1 - labels
         eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=32)
 

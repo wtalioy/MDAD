@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from sklearn.metrics import roc_curve
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
@@ -8,10 +8,7 @@ from tqdm import tqdm
 from loguru import logger
 from typing import List, Optional
 import numpy as np
-import librosa
 import os
-import shutil
-import yaml
 
 from baselines.RawNet2.model import RawNet as RawNetModel
 from baselines.RawNet2.utils import *
@@ -21,27 +18,12 @@ from config import Label
 
 class RawNet2(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
-        self.device = device
+        super().__init__(device, **kwargs)
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "asvspoof2019_LA.pth")
         model_args = self._load_model_config()
         self.model = RawNetModel(model_args, device).to(device)
         
         self.supported_metrics = ["eer"]
-
-    def _load_model_config(self) -> dict:
-        config_path = os.path.join(os.path.dirname(__file__), "config", "model.yaml")
-        with open(config_path, "r") as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        return config
-
-    def _load_train_config(self, dataset_name: str) -> dict:
-        config_path = os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml")
-        if not os.path.exists(config_path):
-            config_path = os.path.join(os.path.dirname(__file__), "config", "train_default.yaml")
-            shutil.copy(config_path, os.path.join(os.path.dirname(__file__), "config", f"train_{dataset_name.lower()}.yaml"))
-        with open(config_path, "r") as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        return config
 
     def _init_train(self, args: dict):
         if args['multi_gpu']:
@@ -73,34 +55,6 @@ class RawNet2(Baseline):
             self.optimizer = torch.optim.Adam(params, lr=args['lr'], weight_decay=args['wd'], amsgrad=args['amsgrad'])
         else:
             raise ValueError(f"Optimizer {args['optimizer']} not supported")
-
-    def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
-        def pad(x, max_len=64600):
-            x_len = x.shape[0]
-            if x_len >= max_len:
-                return x[:max_len]
-            # need to pad
-            num_repeats = int(max_len / x_len) + 1
-            padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
-            return padded_x
-
-        class CustomDataset(Dataset):
-            def __init__(self, data, labels):
-                self.paths = data
-                self.labels = labels
-            def __len__(self):
-                return len(self.paths)
-            def __getitem__(self, idx):
-                path = self.paths[idx]
-                X, _ = librosa.load(path, sr=None)
-                X_pad = pad(X)
-                x_inp= torch.from_numpy(X_pad).float()
-                y = self.labels[idx]
-                return x_inp, y
-
-        dataset = CustomDataset(data, labels)
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
-        return loader
 
     def _train_epoch(self, epoch: int, train_loader: DataLoader):
         self.model.train()
@@ -166,7 +120,7 @@ class RawNet2(Baseline):
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt))
-            if Label.real.value == 0:
+            if Label.real != 1:
                 labels = 1 - labels
         eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=128)
         
