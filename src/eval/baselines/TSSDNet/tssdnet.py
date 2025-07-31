@@ -59,7 +59,7 @@ class TSSDNet_Base(Baseline):
                 pbar.update(1)
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
-        train_config = self._load_train_config(dataset_name)
+        train_config = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, shuffle=True, drop_last=True, batch_size=train_config['batch_size'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=32)
 

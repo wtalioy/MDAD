@@ -20,7 +20,7 @@ class RawNet2(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "asvspoof2019_LA.pth")
-        model_args = self._load_model_config()
+        model_args = self._load_model_config(os.path.dirname(__file__))
         self.model = RawNetModel(model_args, device).to(device)
         
         self.supported_metrics = ["eer"]
@@ -88,7 +88,7 @@ class RawNet2(Baseline):
         return float(eer)
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
-        args = self._load_train_config(dataset_name)
+        args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=args['bs'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, batch_size=128)
 

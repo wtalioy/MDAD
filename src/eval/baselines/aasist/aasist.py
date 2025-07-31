@@ -21,7 +21,7 @@ class AASIST_Base(Baseline):
     def __init__(self, model_name: str = "AASIST", device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
-        model_args = self._load_model_config()
+        model_args = self._load_model_config(os.path.dirname(__file__), model_name)
         self.model = self._load_model(model_args)
         self.supported_metrics = ['eer', 'tdcf']
 
@@ -78,7 +78,7 @@ class AASIST_Base(Baseline):
                 pbar.update(1)
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
-        train_config = self._load_train_config(dataset_name)
+        train_config = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=train_config['batch_size'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=16)
         optim_config = train_config["optim_config"]
