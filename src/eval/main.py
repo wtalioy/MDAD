@@ -24,33 +24,34 @@ def main(args):
     
     os.makedirs("logs", exist_ok=True)
     log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
-    logger.info(f"Evaluating {args.baseline} on {args.dataset} with metrics: {args.metrics} in {args.mode} mode")
+    logger.info(f"Evaluating {args.baseline} on datasets: {args.dataset} with metrics: {args.metrics} in {args.mode} mode")
     
     baseline = BASELINE_MAP[args.baseline](**vars(args))
-    dataset = DATASET_MAP[args.dataset](**vars(args))
+    for dataset in args.dataset:
+        dataset = DATASET_MAP[dataset](**vars(args))
 
-    results = None
-    if args.mode == "cross-domain":
-        if not args.train_only:
-            results = dataset.evaluate(baseline, args.metrics)
-    elif args.mode == "in-domain":
-        if not args.eval_only:
-            logger.info("Training baseline ...")
-            logger.remove(log_id)
-            dataset.train(baseline)
-        if not args.train_only:
-            logger.info("Evaluating baseline ...")
-            results = dataset.evaluate(baseline, args.metrics, in_domain=True)
-            logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
+        results = None
+        if args.mode == "cross-domain":
+            if not args.train_only:
+                results = dataset.evaluate(baseline, args.metrics)
+        elif args.mode == "in-domain":
+            if not args.eval_only:
+                logger.info("Training baseline ...")
+                logger.remove(log_id)
+                dataset.train(baseline)
+            if not args.train_only:
+                logger.info("Evaluating baseline ...")
+                results = dataset.evaluate(baseline, args.metrics, in_domain=True)
+                logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
 
-    if results is not None:
-        logger.info("Evaluation results:")
-        display_results(results, args.baseline, args.dataset)
+        if results is not None:
+            logger.info("Evaluation results:")
+            display_results(results, args.baseline, dataset)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
     parser.add_argument("--baseline", type=str, default="inc-tssdnet", help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
-    parser.add_argument("--dataset", type=str, default="asvspoof2021", help="Name of the dataset", choices=list(DATASET_MAP.keys()))
+    parser.add_argument("--dataset", type=str, nargs="+", default=["news", "audiobook", "emotional", "publicfigure"], help="Name of the dataset", choices=list(DATASET_MAP.keys()))
     parser.add_argument("--subset", type=str, default="DF", help="Subset of the dataset")
     parser.add_argument("--mode", type=str, default="cross-domain", help="Mode of the evaluation", choices=["cross-domain", "in-domain"])
     parser.add_argument("--train_only", action="store_true", help="Train the baseline only")
