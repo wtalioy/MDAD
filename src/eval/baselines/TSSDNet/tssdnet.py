@@ -121,7 +121,7 @@ class TSSDNet_Base(Baseline):
         self.model.eval()
         probs = torch.empty(0, 2)
         for batch, _ in tqdm(data_loader, desc="Evaluating EER"):
-            batch = batch.to(self.device)
+            batch = batch.unsqueeze(1).to(self.device)
             output = self.model(batch)
             prob = F.softmax(output, dim=1)
             probs = torch.cat((probs, prob.cpu()), dim=0)
