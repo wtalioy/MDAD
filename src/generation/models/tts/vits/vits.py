@@ -5,7 +5,7 @@ from .utils import get_hparams_from_file, load_checkpoint
 from .models import SynthesizerTrn
 from .text.symbols import symbols
 from .text import text_to_sequence
-from generation.models.tts.base import BaseTTS
+from models.tts.base import BaseTTS
 
 class VITS(BaseTTS):
     def __init__(self, config="src/generation/models/vits/configs/vctk_base.json", ckpt="src/generation/models/vits/pretrained_vctk.pth", *args, **kwargs):
