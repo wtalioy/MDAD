@@ -29,7 +29,7 @@ class ASVspoof2021(BaseDataset):
                     wav, sr = item["audio"]["array"], item["audio"]["sampling_rate"]
                     audio_path = os.path.join(self.data_dir, f"{i}.wav")
                     sf.write(audio_path, wav, sr)
-                    label = Label.fake.value if item["label"] == 0 else Label.real.value
+                    label = Label.fake if item["label"] == 0 else Label.real
                     file_paths.append(audio_path)
                     labels.append(label)
                 except Exception as e:

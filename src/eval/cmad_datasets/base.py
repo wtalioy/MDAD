@@ -24,11 +24,11 @@ class BaseDataset:
             for item in tqdm(meta, desc=f"Loading {split} split"):
                 if 'real' in item['audio']:
                     file_paths.append(os.path.join(self.data_dir, item['audio']['real']))
-                    labels.append(Label.real.value)
+                    labels.append(Label.real)
                 if 'fake' in item['audio']:
                     for fake_path in item['audio']['fake'].values():
                         file_paths.append(os.path.join(self.data_dir, fake_path))
-                        labels.append(Label.fake.value)
+                        labels.append(Label.fake)
             split_data[split] = file_paths
             split_labels[split] = np.array(labels)
         return split_data, split_labels
@@ -45,7 +45,12 @@ class BaseDataset:
         Returns:
             Dictionary containing evaluation results
         """
-        return baseline.evaluate(data=self.data['test'], labels=self.labels['test'], metrics=metrics, in_domain=in_domain, dataset_name=self.name)
+        if in_domain:
+            return baseline.evaluate(data=self.data['test'], labels=self.labels['test'], metrics=metrics, in_domain=True, dataset_name=self.name)
+        else:
+            data = self.data['train'] + self.data['dev'] + self.data['test']
+            labels = np.concatenate([self.labels['train'], self.labels['dev'], self.labels['test']])
+            return baseline.evaluate(data=data, labels=labels, metrics=metrics, in_domain=False, dataset_name=self.name)
 
     def train(self, baseline: Baseline) -> str:
         """
