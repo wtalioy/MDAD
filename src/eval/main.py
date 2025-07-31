@@ -6,6 +6,17 @@ from loguru import logger
 from baselines import BASELINE_MAP
 from cmad_datasets import DATASET_MAP
 
+def display_results(results: dict, baseline: str, dataset: str):
+    if isinstance(list(results.values())[0], dict): # PartialFake specific
+        for source_name, source_results in results.items():
+            logger.info("Evaluation results:")
+            for metric, value in source_results.items():
+                logger.info(f"({baseline} on {dataset} from {source_name}) {metric}: {value}")
+    else:
+        logger.info("Evaluation results:")
+        for metric, value in results.items():
+            logger.info(f"({baseline} on {dataset}) {metric}: {value}")
+
 def main(args):
     warnings.filterwarnings("ignore")
     
@@ -34,8 +45,7 @@ def main(args):
 
     if results is not None:
         logger.info("Evaluation results:")
-        for metric, value in results.items():
-            logger.info(f"({args.baseline} on {args.dataset}) {metric}: {value}")
+        display_results(results, args.baseline, args.dataset)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
