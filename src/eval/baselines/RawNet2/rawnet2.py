@@ -135,8 +135,8 @@ class RawNet2(Baseline):
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
         args = self._load_train_config(dataset_name)
-        train_loader = self._prepare_loader(train_data, train_labels)
-        eval_loader = self._prepare_loader(eval_data, eval_labels)
+        train_loader = self._prepare_loader(train_data, train_labels, batch_size=args['bs'])
+        eval_loader = self._prepare_loader(eval_data, eval_labels, batch_size=128)
 
         log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
         logger.info(f"Training RawNet2 on {dataset_name}")
@@ -168,7 +168,7 @@ class RawNet2(Baseline):
             self.model.load_state_dict(torch.load(self.default_ckpt))
             if Label.real.value == 0:
                 labels = 1 - labels
-        eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False)
+        eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=128)
         
         results = {}
         for metric in metrics:

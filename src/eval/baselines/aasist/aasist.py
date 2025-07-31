@@ -120,8 +120,8 @@ class AASIST_Base(Baseline):
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
         train_config = self._load_train_config(dataset_name)
-        train_loader = self._prepare_loader(train_data, train_labels)
-        eval_loader = self._prepare_loader(eval_data, eval_labels)
+        train_loader = self._prepare_loader(train_data, train_labels, batch_size=train_config['batch_size'])
+        eval_loader = self._prepare_loader(eval_data, eval_labels, batch_size=16)
         optim_config = train_config["optim_config"]
         optim_config["steps_per_epoch"] = len(train_loader)
         optim_config["epochs"] = train_config['num_epochs']
@@ -205,7 +205,7 @@ class AASIST_Base(Baseline):
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt))
 
-        data_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False)
+        data_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=16)
 
         # Run inference to get predictions
         scores = self._run_inference(data_loader)

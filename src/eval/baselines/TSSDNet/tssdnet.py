@@ -101,9 +101,9 @@ class TSSDNet_Base(Baseline):
                 pbar.update(1)
 
     def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
-        train_loader = self._prepare_loader(train_data, train_labels, shuffle=True, drop_last=True)
-        eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False)
         train_config = self._load_train_config(dataset_name)
+        train_loader = self._prepare_loader(train_data, train_labels, shuffle=True, drop_last=True, batch_size=train_config['batch_size'])
+        eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=32)
 
         log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
         logger.info(f"Training TSSDNet on {dataset_name}")
@@ -135,7 +135,7 @@ class TSSDNet_Base(Baseline):
             self.model.load_state_dict(torch.load(self.default_ckpt)["model_state_dict"])
             if Label.real.value == 1:
                 labels = 1 - labels
-        eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False)
+        eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=32)
 
         results = {}
         for metric in metrics:
