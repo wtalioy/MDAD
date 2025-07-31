@@ -29,6 +29,7 @@ def main(args):
     baseline = BASELINE_MAP[args.baseline](**vars(args))
     for dataset in args.dataset:
         dataset = DATASET_MAP[dataset](**vars(args))
+        logger.info(f"Evaluating {args.baseline} on {dataset.name} ...")
 
         results = None
         if args.mode == "cross-domain":
@@ -44,9 +45,11 @@ def main(args):
                 results = dataset.evaluate(baseline, args.metrics, in_domain=True)
                 logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
 
+        logger.info(f"Evaluation for {dataset.name} completed")
         if results is not None:
-            logger.info("Evaluation results:")
-            display_results(results, args.baseline, dataset)
+            display_results(results, args.baseline, dataset.name)
+
+    logger.info(f"Evaluation completed")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
