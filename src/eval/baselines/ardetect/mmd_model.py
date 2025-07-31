@@ -146,7 +146,8 @@ class mmdModel(nn.Module):
             "num_attention_heads": 4,
             "output_attentions": True,
             "output_hidden_states": False,
-            "return_dict": False,  # Ensure tuple output for backward compatibility
+            "return_dict": False,
+            "_attn_implementation": "eager"
         }
         if self.num_mlp > 0:
             self.mlp2 = nn.ModuleList([mlp_meta(config) for _ in range(self.num_mlp)])
