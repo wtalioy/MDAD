@@ -1,4 +1,5 @@
 import os
+import librosa
 import numpy as np
 from typing import List
 from tqdm import tqdm
@@ -11,6 +12,7 @@ class BaseDataset:
         self.name = "BaseDataset"
         self.data_dir = data_dir
         self.splits = ['train', 'dev', 'test']
+        self.sr = 16000
         self.data, self.labels = self._load_meta()
 
     def _load_meta(self):
@@ -19,17 +21,19 @@ class BaseDataset:
         for split in self.splits:
             with open(os.path.join(self.data_dir, f'meta_{split}.json'), 'r', encoding='utf-8') as f:
                 meta = json.load(f)
-            file_paths = []
+            data = []
             labels = []
             for item in tqdm(meta, desc=f"Loading {split} split"):
                 if 'real' in item['audio']:
-                    file_paths.append(os.path.join(self.data_dir, item['audio']['real']))
+                    audio, _ = librosa.load(os.path.join(self.data_dir, item['audio']['real']), sr=None)
+                    data.append(audio)
                     labels.append(Label.real)
                 if 'fake' in item['audio']:
                     for fake_path in item['audio']['fake'].values():
-                        file_paths.append(os.path.join(self.data_dir, fake_path))
+                        audio, _ = librosa.load(os.path.join(self.data_dir, fake_path), sr=None)
+                        data.append(audio)
                         labels.append(Label.fake)
-            split_data[split] = file_paths
+            split_data[split] = data
             split_labels[split] = np.array(labels)
         return split_data, split_labels
 
@@ -50,7 +54,7 @@ class BaseDataset:
         else:
             data = self.data['train'] + self.data['dev'] + self.data['test']
             labels = np.concatenate([self.labels['train'], self.labels['dev'], self.labels['test']])
-            return baseline.evaluate(data=data, labels=labels, metrics=metrics, in_domain=False, dataset_name=self.name)
+            return baseline.evaluate(data=data, labels=labels, metrics=metrics, sr=self.sr, in_domain=False)
 
     def train(self, baseline: Baseline) -> str:
         """

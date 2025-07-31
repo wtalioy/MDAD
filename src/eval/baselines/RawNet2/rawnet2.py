@@ -87,7 +87,7 @@ class RawNet2(Baseline):
         eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
         return float(eer)
 
-    def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=args['bs'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, batch_size=128)
@@ -115,7 +115,7 @@ class RawNet2(Baseline):
         logger.remove(log_id)
         self.model = self.model_to_save
 
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:

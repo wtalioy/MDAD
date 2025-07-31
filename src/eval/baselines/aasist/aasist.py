@@ -77,7 +77,7 @@ class AASIST_Base(Baseline):
                 pbar.set_description('epoch: %d, cce:%.3f'%(epoch, batch_loss))
                 pbar.update(1)
 
-    def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str):
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
         train_config = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=train_config['batch_size'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=16)
@@ -110,7 +110,7 @@ class AASIST_Base(Baseline):
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
 
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:

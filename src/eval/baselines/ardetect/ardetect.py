@@ -29,8 +29,8 @@ class ARDetect(Baseline):
         self.num_gpus = torch.cuda.device_count() if device == "cuda" else 1
         logger.info(f"Using {self.num_gpus} GPU(s)")
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-xls-r-2b")
-        self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-xls-r-2b")
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("/home/ruimingwang/AR-Detect/cache/extractors/wav2vec2-xls-r-2b")
+        self.model = Wav2Vec2Model.from_pretrained("/home/ruimingwang/AR-Detect/cache/extractors/wav2vec2-xls-r-2b")
         
         # Enable multi-GPU support for Wav2Vec2 model
         if self.num_gpus > 1:
@@ -150,13 +150,14 @@ class ARDetect(Baseline):
 
 
     @torch.no_grad()
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         feature_list = []
         # Use larger batch size for multi-GPU evaluation
         batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 8
         
-        for audio_path in tqdm(data, desc="Loading test data"):
-            audio, _ = librosa.load(audio_path, sr=self.sample_rate)
+        for audio in tqdm(data, desc="Loading test data"):
+            if sr != self.sample_rate:
+                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
             segments = self._segment_audio(audio)
             feature_list.append(self._load_features(segments, batch_size=batch_size))
         

@@ -30,7 +30,7 @@ class Baseline:
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
 
-    def _prepare_loader(self, data: List[str], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
+    def _prepare_loader(self, data: List[np.ndarray], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
         def pad(x, max_len=64600):
             x_len = x.shape[0]
             if x_len >= max_len:
@@ -42,15 +42,14 @@ class Baseline:
 
         class CustomDataset(Dataset):
             def __init__(self, data, labels):
-                self.paths = data
+                self.data = data
                 self.labels = labels
             def __len__(self):
-                return len(self.paths)
+                return len(self.data)
             def __getitem__(self, idx):
-                path = self.paths[idx]
-                X, _ = librosa.load(path, sr=None)
-                X_pad = pad(X)
-                x_inp= torch.from_numpy(X_pad).float()
+                x = self.data[idx]
+                x_pad = pad(x)
+                x_inp= torch.from_numpy(x_pad).float()
                 y = self.labels[idx]
                 return x_inp, y
 
@@ -58,8 +57,8 @@ class Baseline:
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
         return loader
 
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str], ckpt_path: Optional[str] = None) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
-    def train(self, train_data: List[str], train_labels: np.ndarray, eval_data: List[str], eval_labels: np.ndarray, dataset_name: str) -> str:
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str) -> str:
         raise NotImplementedError("This method should be overridden by subclasses.")
