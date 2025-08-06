@@ -104,6 +104,9 @@ class BaseRawDataset:
         # Process each item with round-robin distribution and fallback logic
         failed_items = []
         for idx, item in enumerate(tqdm(meta_data, desc="Generating audio")):
+            if len(item["audio"]["fake"]) > 0:
+                continue
+
             success = False
             
             # Start with the assigned combination (round-robin distribution)
