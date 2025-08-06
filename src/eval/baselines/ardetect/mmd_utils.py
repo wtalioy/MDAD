@@ -156,7 +156,7 @@ def MMD_3_Sample_Test(
 
     t = u_yy - 2 * u_xy - (u_zz - 2 * u_xz)
     if Diff_Var.item() <= 0:
-        Diff_Var = torch.max(epsilon, torch.tensor(1e-08))
+        Diff_Var = torch.max(torch.tensor(epsilon), torch.tensor(1e-08))
     p_value = torch.distributions.Normal(0, 1).cdf(-t / torch.sqrt((Diff_Var)))
     t = t / torch.sqrt(Diff_Var)
 
