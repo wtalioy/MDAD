@@ -12,6 +12,7 @@ from sklearn.metrics import roc_curve
 from baselines import Baseline
 from baselines.ardetect.mmd_model import ModelLoader
 from baselines.ardetect.mmd_utils import MMD_3_Sample_Test
+from config import Label
 
 class ARDetect(Baseline):
     def __init__(self,
@@ -46,30 +47,33 @@ class ARDetect(Baseline):
         self.real_features, self.fake_features = self._load_ref_features()
 
     def _load_ref_features(self) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 1
-        logger.info(f"Loading real features with batch size {batch_size}")
+        batch_size = 8 * self.num_gpus
         if not os.path.exists(os.path.join(self.cache_dir, "real_ref_features.pt")):
+            logger.info(f"Loading real features with batch size {batch_size}")
             real_features = self._load_features(self.real_data, batch_size=batch_size)
             torch.save(real_features, os.path.join(self.cache_dir, "real_ref_features.pt"))
+            logger.info(f"Real features cached at {os.path.join(self.cache_dir, 'real_ref_features.pt')}")
         else:
             real_features = torch.load(os.path.join(self.cache_dir, "real_ref_features.pt"))
-        logger.info(f"Loading fake features with batch size {batch_size}")
+            logger.info(f"Real features loaded from cache at {os.path.join(self.cache_dir, 'real_ref_features.pt')}")
         if not os.path.exists(os.path.join(self.cache_dir, "fake_ref_features.pt")):
+            logger.info(f"Loading fake features with batch size {batch_size}")
             fake_features = self._load_features(self.fake_data, batch_size=batch_size)
             torch.save(fake_features, os.path.join(self.cache_dir, "fake_ref_features.pt"))
+            logger.info(f"Fake features cached at {os.path.join(self.cache_dir, 'fake_ref_features.pt')}")
         else:
             fake_features = torch.load(os.path.join(self.cache_dir, "fake_ref_features.pt"))
+            logger.info(f"Fake features loaded from cache at {os.path.join(self.cache_dir, 'fake_ref_features.pt')}")
         return real_features, fake_features
 
     def _load_ref_data(self):
         return self._load_asvspoof()
     
-    def _load_features(self, audio_data: List[np.ndarray], batch_size: int = 8) -> List[torch.Tensor]:
+    def _load_features(self, audio_data: List[np.ndarray], batch_size: int = 4) -> List[torch.Tensor]:
         features = []
-        effective_batch_size = batch_size * self.num_gpus if self.num_gpus > 1 else batch_size
         
-        for i in range(0, len(audio_data), effective_batch_size):
-            batch_audio = audio_data[i:i + effective_batch_size]
+        for i in range(0, len(audio_data), batch_size):
+            batch_audio = audio_data[i:i + batch_size]
 
             batch_inputs = []
             for audio_array in batch_audio:
@@ -77,47 +81,68 @@ class ARDetect(Baseline):
                     audio_array,
                     sampling_rate=self.sample_rate,
                     padding="max_length",
-                    max_length=12000,
+                    max_length=10000,
                     truncation=True,
                     return_tensors="pt"
                 )
                 batch_inputs.append(inputs)
             
             if batch_inputs:
-                # Stack inputs for batch processing
                 if len(batch_inputs) > 1:
+                    # Stack inputs for batch processing
                     stacked_inputs = {}
                     for key in batch_inputs[0].keys():
                         stacked_inputs[key] = torch.cat([inp[key] for inp in batch_inputs], dim=0)
                     stacked_inputs = {k: v.to(self.device) for k, v in stacked_inputs.items()}
                     
-                    # Process entire batch at once
+                    # Process batch and immediately move to CPU
                     with torch.no_grad():
                         outputs = self.model(**stacked_inputs)
-                        batch_features = torch.split(outputs.last_hidden_state.cpu(), 1, dim=0)
-                        features.extend([feat.squeeze(0) for feat in batch_features])
+                        # Move to CPU immediately and detach from computation graph
+                        batch_features = outputs.last_hidden_state.detach().cpu()
+                        batch_features = torch.split(batch_features, 1, dim=0)
+                        features.extend([feat for feat in batch_features])
+                        
+                    # Cleanup GPU memory
+                    del stacked_inputs, outputs, batch_features
                 else:
                     # Single item processing
                     inputs = {k: v.to(self.device) for k, v in batch_inputs[0].items()}
                     with torch.no_grad():
                         outputs = self.model(**inputs)
-                        features.append(outputs.last_hidden_state.cpu().squeeze(0))
+                        # Move to CPU immediately and detach from computation graph
+                        feature = outputs.last_hidden_state.detach().cpu()
+                        features.append(feature)
+                        
+                    # Cleanup GPU memory
+                    del inputs, outputs
+                
+                # Clear GPU cache after each batch
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            
+            # Cleanup batch inputs
+            del batch_inputs, batch_audio
         
         return features
 
 
-    def _load_asvspoof(self, limit: int = 1024) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+
+    def _load_asvspoof(self, limit: int = 512) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         real_data = []
         fake_data = []
         data = load_dataset("Bisher/ASVspoof_2019_LA", split="train")
+        
         for item in data:
             item = cast(Dict[str, Any], item)
             if item["key"] == 0 and len(real_data) < limit:
                 real_data.append(item["audio"]["array"])
             elif item["key"] == 1 and len(fake_data) < limit:
                 fake_data.append(item["audio"]["array"])
-            else:
-                continue
+            
+            # Break early if both lists are full
+            if len(real_data) >= limit and len(fake_data) >= limit:
+                break
+                
         return real_data, fake_data
 
 
@@ -151,32 +176,32 @@ class ARDetect(Baseline):
 
     @torch.no_grad()
     def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
-        feature_list = []
-        # Use larger batch size for multi-GPU evaluation
-        batch_size = 8 * self.num_gpus if self.num_gpus > 1 else 8
-        
-        for audio in tqdm(data, desc="Loading test data"):
-            if sr != self.sample_rate:
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            segments = self._segment_audio(audio)
-            feature_list.append(self._load_features(segments, batch_size=batch_size))
-        
         results = {}
         for metric in metrics:
             if metric not in self.supported_metrics:
                 raise ValueError(f"Unsupported metric: {metric}")
             func = getattr(self, f"_evaluate_{metric}")
-            metric_rst = func(feature_list, labels)
+            metric_rst = func(data, labels, sr=sr)
             results[metric] = metric_rst
 
         return results
 
 
-    def _evaluate_eer(self, feature_list: List[List[torch.Tensor]], labels: np.ndarray) -> float:
+    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, sr: int) -> float:
+        if Label.real != 1:
+            labels = 1 - labels
         scores = []
-        for fea_test in tqdm(feature_list, desc="Evaluating EER"):
-            score = self._three_sample_test(fea_test, round=10)
-            scores.append(score)
+        for audio in tqdm(data, desc="Evaluating EER"):
+            if sr != self.sample_rate:
+                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
+            segments = self._segment_audio(audio)
+            if len(segments) > 1:
+                fea_test = self._load_features(segments, batch_size=8)
+                score = self._three_sample_test(fea_test, round=10)
+                scores.append(score)
+            else:
+                logger.warning(f"Audio too short to test")
+                scores.append(Label.real)
 
         scores = np.array(scores)
         eer, _ = self._compute_eer(scores, labels)
@@ -206,7 +231,7 @@ class ARDetect(Baseline):
             fea_generated_sample = fea_generated[torch.randperm(len(fea_generated))[:min_len]]
             fea_test_sample = fea_test[torch.randperm(len(fea_test))[:min_len]]
 
-            # Use the MMD network (potentially with DataParallel)
+            # Use the MMD network
             with torch.no_grad():
                 net_test = self.net(fea_test_sample)
                 net_real = self.net(fea_real_sample)
@@ -228,9 +253,18 @@ class ARDetect(Baseline):
             h_u_list.append(h_u)
             p_value_list.append(p_value)
             t_list.append(t)
+            
+            # Cleanup
+            del (fea_real_sample, fea_generated_sample, fea_test_sample,
+                 net_test, net_real, net_generated)
 
+        # Cleanup
+        del fea_real, fea_generated, fea_test
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        
         power = sum(h_u_list) / len(h_u_list) if h_u_list else 0.0
         return power
+
 
 
     def _compute_eer(self, scores: np.ndarray, labels: np.ndarray) -> Tuple[Any, Any]:
