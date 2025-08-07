@@ -54,6 +54,8 @@ class Baseline:
                 return x_inp, y
 
         dataset = CustomDataset(data, labels)
+        if len(data) < batch_size:
+            drop_last = False
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
         return loader
 
