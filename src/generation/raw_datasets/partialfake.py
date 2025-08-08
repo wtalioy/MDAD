@@ -1,5 +1,6 @@
 from .base import BaseRawDataset
 import os
+import json
 import random
 import soundfile as sf
 from loguru import logger
@@ -7,13 +8,45 @@ import numpy as np
 from tqdm import tqdm
 from typing import List
 from models import BaseTTS, BaseVC
-import json
+from transcription.parakeet import Parakeet
 
 class PartialFake(BaseRawDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(data_dir or "data/PartialFake", *args, **kwargs)
+        self.data_sources = ["data/Interview", "data/Podcast", "data/PublicSpeech"]
+        self.ratio = 0.3
 
-    def _select_partial_fake(self, item, min_word_num=1, max_word_num=3, sample_rate=16000) -> tuple[str, np.ndarray, np.ndarray]:
+    def _create_meta(self) -> dict:
+        os.makedirs(self.data_dir, exist_ok=True)
+        model = Parakeet()
+        meta_data = {}
+        for data_dir in self.data_sources:
+            with open(os.path.join(data_dir, "meta_test.json"), "r") as f:
+                domain_meta_data = json.load(f)
+
+            random.shuffle(domain_meta_data)
+            domain_meta_data = domain_meta_data[:int(len(domain_meta_data) * self.ratio)]
+            source_name = data_dir.split("/")[-1]
+
+            for i in tqdm(range(0, len(domain_meta_data), 32), desc=f"Processing {source_name} source"):
+                batch = domain_meta_data[i:i+32]
+                audio_paths = [os.path.join("data", source_name, item["audio"]["real"]) for item in batch]
+                word_timestamps = model.get_word_timestamps(audio_paths)
+                for j, item in enumerate(batch):
+                    for key in list(item.keys()):
+                        if key not in ["text", "audio"]:
+                            del item[key]
+                    item["word_timestamps"] = word_timestamps[j]
+                    item["audio"]["fake"] = {}
+            
+            meta_data[source_name] = domain_meta_data
+
+        with open(os.path.join(self.data_dir, "meta.json"), "w") as f:
+            json.dump(meta_data, f, indent=2, ensure_ascii=False)
+
+        return meta_data
+
+    def _select_partial_fake(self, item, source_name: str, min_word_num=2, max_word_num=4, sample_rate=16000) -> tuple[str, np.ndarray, np.ndarray]:
         word_timestamps = item["word_timestamps"]
         num_words = random.randint(min_word_num, max_word_num)
         
@@ -22,11 +55,10 @@ class PartialFake(BaseRawDataset):
         start_index = random.randint(0, max_start_index)
 
         text = ' '.join([word_item['word'] for word_item in word_timestamps[start_index:start_index + num_words]])    
-        start_time = word_timestamps[start_index] * sample_rate
-        end_time = word_timestamps[start_index + num_words - 1] * sample_rate
 
-        array = sf.read(os.path.join(self.data_dir, item['audio']['real']))[0]
-        array = array[int(start_time):int(end_time)]
+        start_time = word_timestamps[start_index]['start'] * sample_rate
+        end_time = word_timestamps[start_index + num_words - 1]['end'] * sample_rate
+        array = sf.read(os.path.join("data", source_name, item['audio']['real']))[0]
         org_head = array[:int(start_time)]
         org_tail = array[int(end_time):]
         
@@ -36,14 +68,14 @@ class PartialFake(BaseRawDataset):
         """Try to generate audio with given models. Returns True if successful, False otherwise."""
         text = item['text']
         audio_rel_path = item['audio']['real']
-        output_rel_path = f"audio/fake/{source_name}/{idx}.wav"
-        audio_path = os.path.join(self.data_dir, audio_rel_path)
+        output_rel_path = f"audio/{source_name.lower()}/{idx}.wav"
+        audio_path = os.path.join("data", source_name, audio_rel_path)
         output_path = os.path.join(self.data_dir, output_rel_path)
         item['audio']['fake'] = {}
         
         try:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            text, org_head, org_tail = self._select_partial_fake(item)
+            text, org_head, org_tail = self._select_partial_fake(item, source_name=source_name)
             
             if vc_model is None:
                 # TTS only
@@ -78,6 +110,8 @@ class PartialFake(BaseRawDataset):
             
             logger.info(f"Generated audio at {output_path}")
             item['audio']['fake'][model_name] = output_rel_path
+            item['partial_text'] = text
+            del item['word_timestamps']
             return True
             
         except Exception as e:
@@ -87,12 +121,11 @@ class PartialFake(BaseRawDataset):
             return False
 
     def generate(self, tts_models: List[BaseTTS], vc_models: List[BaseVC] = [], language: str = "en", *args, **kwargs):
-        output_dir = os.path.join(self.data_dir, "audio/fake")
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        with open(self.meta_path, 'r', encoding='utf-8') as f:
-            meta_data = json.load(f)
+        if not os.path.exists(self.meta_path):
+            meta_data = self._create_meta()
+        else:
+            with open(self.meta_path, 'r', encoding='utf-8') as f:
+                meta_data = json.load(f)
 
         # Create all possible model combinations
         all_combinations = []
