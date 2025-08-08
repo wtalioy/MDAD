@@ -4,7 +4,7 @@ import torch
 import json
 
 class Voxtral:
-    def __init__(self, device: str = "cuda:1"):
+    def __init__(self, device: str = "cuda"):
         self.device = device
         self.model = VoxtralForConditionalGeneration.from_pretrained("mistralai/Voxtral-Mini-3B-2507", torch_dtype=torch.bfloat16, device_map=device)
         self.processor = AutoProcessor.from_pretrained("mistralai/Voxtral-Mini-3B-2507")
@@ -21,9 +21,9 @@ if __name__ == "__main__":
     from tqdm import tqdm
     import os
     parser = ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="data/Interview")
+    parser.add_argument("--data_dir", type=str, default="data/Podcast")
     parser.add_argument("--language", type=str, default="en")
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--batch_size", type=int, default=4)
     args = parser.parse_args()
     model = Voxtral()
     with open(os.path.join(args.data_dir, "meta.json"), "r") as f:
