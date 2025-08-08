@@ -1,4 +1,4 @@
 batch_size: 16
-num_epoch: 50
+num_epoch: 20
 lr: 0.001
 loss_type: "WCE"  # WCE, mixup

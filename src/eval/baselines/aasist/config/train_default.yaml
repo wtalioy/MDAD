@@ -1,5 +1,5 @@
 batch_size: 24
-num_epochs: 100
+num_epochs: 20
 
 optim_config:
   optimizer: adam
