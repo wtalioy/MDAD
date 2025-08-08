@@ -18,10 +18,10 @@ from config import Label
 class RawGAT_ST(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
+        self.name = "RawGAT-ST"
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "RawGAT_ST_mul.pth")
         model_args = self._load_model_config(os.path.dirname(__file__))
         self.model = RawGAT_ST_Model(model_args, device).to(device)
-        
         self.supported_metrics = ["eer"]
 
     def _init_train(self, args: dict):

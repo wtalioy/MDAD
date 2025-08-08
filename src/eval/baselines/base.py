@@ -9,9 +9,10 @@ import yaml
 
 class Baseline:
     def __init__(self, device: str = "cuda", **kwargs):
+        self.name = None
         self.device = device
         self.supported_metrics = ["eer"]
-
+    
     def _load_model_config(self, model_dir: str, model_name: Optional[str] = None) -> dict:
         if model_name is None:
             config_path = os.path.join(model_dir, "config", "model.yaml")

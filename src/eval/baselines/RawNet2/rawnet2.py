@@ -19,6 +19,7 @@ from config import Label
 class RawNet2(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
+        self.name = "RawNet2"
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "asvspoof2019_LA.pth")
         model_args = self._load_model_config(os.path.dirname(__file__))
         self.model = RawNetModel(model_args, device).to(device)

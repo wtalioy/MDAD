@@ -20,6 +20,7 @@ from config import Label
 class AASIST_Base(Baseline):
     def __init__(self, model_name: str = "AASIST", device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
+        self.name = model_name
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
         model_args = self._load_model_config(os.path.dirname(__file__), model_name)
         self.model = self._load_model(model_args)

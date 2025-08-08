@@ -14,6 +14,7 @@ from config import Label
 class TSSDNet_Base(Baseline):
     def __init__(self, ckpt: str = "Res-TSSDNet", device: str = "cuda", **kwargs):
         super().__init__(device, **kwargs)
+        self.name = ckpt
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{ckpt}.pth")
         self.model = self._load_model(ckpt)
         self.supported_metrics = ["eer", "acc"]

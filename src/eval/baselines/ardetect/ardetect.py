@@ -19,6 +19,7 @@ class ARDetect(Baseline):
                  mmd_model_path: str = "src/eval/baselines/ardetect/mmd.pth",
                  device: str = "cuda",
                  **kwargs):
+        self.name = "ARDetect"
         self.cache_dir = os.path.join(os.path.dirname(__file__), "cache")
         os.makedirs(self.cache_dir, exist_ok=True)
         self.device = device
