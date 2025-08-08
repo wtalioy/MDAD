@@ -1,7 +1,8 @@
 import os
 import json
-from tqdm import tqdm
 import numpy as np
+import librosa
+from tqdm import tqdm
 from typing import List
 from baselines import Baseline
 from .base import BaseDataset
@@ -13,29 +14,25 @@ class PartialFake(BaseDataset):
         self.name = "PartialFake"
 
     def _load_meta(self):
-        split_data = {}
-        split_labels = {}
-        for split in self.splits:
-            with open(os.path.join(self.data_dir, f'meta_{split}.json'), 'r', encoding='utf-8') as f:
+        with open(os.path.join(self.data_dir, f'meta.json'), 'r', encoding='utf-8') as f:
                 meta = json.load(f)
-            source_data = {}
-            source_labels = {}
-            for source_name, items in meta.items():
-                file_paths = []
-                labels = []
-                for item in tqdm(items, desc=f"Loading {split} split from {source_name}"):
-                    if 'real' in item['audio']:
-                        file_paths.append(os.path.join(self.data_dir, item['audio']['real']))
-                        labels.append(Label.real)
-                    if 'fake' in item['audio']:
-                        for fake_path in item['audio']['fake'].values():
-                            file_paths.append(os.path.join(self.data_dir, fake_path))
-                            labels.append(Label.fake)
-                source_data[source_name] = file_paths
-                source_labels[source_name] = np.array(labels)
-            split_data[split] = source_data
-            split_labels[split] = source_labels
-        return split_data, split_labels
+        source_data = {}
+        source_labels = {}
+        for source_name, items in meta.items():
+            data = []
+            labels = []
+            for item in tqdm(items, desc=f"Loading {source_name} source"):
+                if 'real' in item['audio']:
+                    audio, _ = librosa.load(os.path.join("data", source_name, item['audio']['real']), sr=None)
+                    data.append(audio)
+                    labels.append(Label.real)
+                if 'fake' in item['audio']:
+                    audio, _ = librosa.load(os.path.join(self.data_dir, item['audio']['fake']), sr=None)
+                    data.append(audio)
+                    labels.append(Label.fake)
+            source_data[source_name] = data
+            source_labels[source_name] = np.array(labels)
+        return source_data, source_labels
 
     def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
         """
@@ -50,15 +47,8 @@ class PartialFake(BaseDataset):
             Dictionary containing evaluation results
         """
         results = {}
-        if in_domain:
-            data = self.data['test']
-            labels = self.labels['test']
-        else:
-            data = self.data['train'] + self.data['dev'] + self.data['test']
-            labels = np.concatenate([self.labels['train'], self.labels['dev'], self.labels['test']])
-        for source_name, data in data.items():
-            source_data = data[source_name]
-            source_labels = labels[source_name]
+        for source_name, source_data in self.data.items():
+            source_labels = self.labels[source_name]
             source_results = baseline.evaluate(data=source_data, labels=source_labels, metrics=metrics, in_domain=in_domain, dataset_name=self.name)
             results[source_name] = source_results
         return results
