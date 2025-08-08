@@ -2,6 +2,7 @@ from .base import BaseRawDataset
 import os
 import json
 import random
+import librosa
 import soundfile as sf
 from loguru import logger
 import numpy as np
@@ -14,6 +15,7 @@ class PartialFake(BaseRawDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(data_dir or "data/PartialFake", *args, **kwargs)
         self.data_sources = ["data/Interview", "data/Podcast", "data/PublicSpeech"]
+        self.sample_rate = 16000
         self.ratio = 0.3
 
     def _create_meta(self) -> dict:
@@ -46,7 +48,7 @@ class PartialFake(BaseRawDataset):
 
         return meta_data
 
-    def _select_partial_fake(self, item, source_name: str, min_word_num=2, max_word_num=4, sample_rate=16000) -> tuple[str, np.ndarray, np.ndarray]:
+    def _select_partial_fake(self, item, source_name: str, min_word_num=2, max_word_num=4) -> tuple[str, np.ndarray, np.ndarray]:
         word_timestamps = item["word_timestamps"]
         num_words = random.randint(min_word_num, max_word_num)
         
@@ -56,11 +58,13 @@ class PartialFake(BaseRawDataset):
 
         text = ' '.join([word_item['word'] for word_item in word_timestamps[start_index:start_index + num_words]])    
 
+        array, sample_rate = librosa.load(os.path.join("data", source_name, item['audio']['real']), sr=None)
         start_time = word_timestamps[start_index]['start'] * sample_rate
         end_time = word_timestamps[start_index + num_words - 1]['end'] * sample_rate
-        array = sf.read(os.path.join("data", source_name, item['audio']['real']))[0]
         org_head = array[:int(start_time)]
         org_tail = array[int(end_time):]
+        org_head = librosa.resample(org_head, orig_sr=sample_rate, target_sr=self.sample_rate)
+        org_tail = librosa.resample(org_tail, orig_sr=sample_rate, target_sr=self.sample_rate)
         
         return text, org_head, org_tail
 
@@ -80,6 +84,7 @@ class PartialFake(BaseRawDataset):
             if vc_model is None:
                 # TTS only
                 fake_audio, sample_rate = tts_model.infer(text, ref_audio=audio_path, language=language, **kwargs)
+                fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
                 model_name = tts_model.model_name
             else:
                 # TTS + VC
@@ -96,6 +101,7 @@ class PartialFake(BaseRawDataset):
                 
                 # Then perform voice conversion with VC
                 vc_model.convert(temp_tts_path, temp_vc_path, output_path)
+                fake_audio = librosa.resample(fake_audio, orig_sr=sample_rate, target_sr=self.sample_rate)
                 
                 # Clean up temporary file
                 if os.path.exists(temp_tts_path):
@@ -106,7 +112,7 @@ class PartialFake(BaseRawDataset):
                 model_name = f"{tts_model.model_name} + {vc_model.model_name}"
 
             fake_audio = np.concatenate([org_head, fake_audio, org_tail])
-            sf.write(output_path, fake_audio, sample_rate)
+            sf.write(output_path, fake_audio, self.sample_rate)
             
             logger.info(f"Generated audio at {output_path}")
             item['audio']['fake'][model_name] = output_rel_path
