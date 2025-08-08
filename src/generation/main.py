@@ -2,7 +2,7 @@ import os
 import argparse
 from loguru import logger
 from models import TTS_MODEL_MAP, VC_MODEL_MAP
-from datasets import RAWDATASET_MAP
+from raw_datasets import RAWDATASET_MAP
 from datetime import datetime
 
 
@@ -27,9 +27,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate audio data")
-    parser.add_argument("--dataset", type=str, nargs="+", default=["podcast", "interview", "movie", "publicspeech", "phonecall_continued"], help="Name of the dataset", choices=list(RAWDATASET_MAP.keys()))
+    parser.add_argument("--dataset", type=str, nargs="+", default=["partialfake"], help="Name of the dataset", choices=list(RAWDATASET_MAP.keys()))
     parser.add_argument("--tts_model", type=str, nargs="+", default=["gpt4omini", "xttsv2", "melotts", "bark", "yourtts"], help="Name of the TTS model", choices=list(TTS_MODEL_MAP.keys()))
-    parser.add_argument("--vc_model", type=str, nargs="+", default=["knnvc", "freevc", "openvoice"], help="Name of the VC model", choices=list(VC_MODEL_MAP.keys()))
+    parser.add_argument("--vc_model", type=str, nargs="+", default=["openvoice"], help="Name of the VC model", choices=list(VC_MODEL_MAP.keys()))
     parser.add_argument("--subset", type=str, default="zh-cn", help="Subset of the dataset")
     parser.add_argument("--data_dir", type=str, default=None, help="Directory for dataset")
     args = parser.parse_args()
