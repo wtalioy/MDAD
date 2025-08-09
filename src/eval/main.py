@@ -21,15 +21,14 @@ def main(args):
     warnings.filterwarnings("ignore")
     
     torch.multiprocessing.set_sharing_strategy('file_system')
-    
     os.makedirs("logs", exist_ok=True)
+    log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
     
     for dataset in args.dataset:
         logger.info(f"Preparing {dataset} ...")
         dataset = DATASET_MAP[dataset](**vars(args))
         for baseline in args.baseline:
             baseline = BASELINE_MAP[baseline](**vars(args))
-            log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
             logger.info(f"Evaluating {baseline.name} on {dataset.name} with metric: {args.metric} in {args.mode}-domain mode")
 
             results = None
@@ -41,10 +40,10 @@ def main(args):
                     logger.info("Training baseline ...")
                     logger.remove(log_id)
                     dataset.train(baseline)
+                    log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
                 if not args.train_only:
                     logger.info("Evaluating baseline ...")
                     results = dataset.evaluate(baseline, args.metric, in_domain=True)
-                    logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
                 else:
                     continue
 
