@@ -6,6 +6,7 @@ from .phonecall import PhoneCall
 from .interview import Interview
 from .publicspeech import PublicSpeech
 from .partialfake import PartialFake
+from .noisyspeech import NoisySpeech
 
 RAWDATASET_MAP = {
     "news": News,
@@ -15,6 +16,7 @@ RAWDATASET_MAP = {
     "interview": Interview,
     "publicspeech": PublicSpeech,
     "partialfake": PartialFake,
+    "noisyspeech": NoisySpeech,
 }
 
 __all__ = ["BaseRawDataset", "RAWDATASET_MAP"]
