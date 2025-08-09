@@ -55,13 +55,13 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
-    parser.add_argument("--baseline", type=str, nargs="+", default=["aasist", "aasist-l", "rawnet2", "res-tssdnet", "inc-tssdnet"], help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
-    parser.add_argument("--dataset", type=str, nargs="+", default=["podcast", "phonecall", "publicspeech", "movie", "interview"], help="Name of the dataset", choices=list(DATASET_MAP.keys()))
-    parser.add_argument("--subset", type=str, default=None, help="Subset of the dataset")
-    parser.add_argument("--mode", type=str, default="cross", help="Mode of the evaluation", choices=["cross", "in"])
+    parser.add_argument("-b", "--baseline", type=str, nargs="+", default=["aasist", "aasist-l", "rawnet2", "res-tssdnet", "inc-tssdnet"], help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
+    parser.add_argument("-d", "--dataset", type=str, nargs="+", default=["phonecall", "publicspeech", "interview"], help="Name of the dataset", choices=list(DATASET_MAP.keys()))
+    parser.add_argument("-s", "--subset", type=str, default=None, help="Subset of the dataset")
+    parser.add_argument("-m", "--mode", type=str, default="cross", help="Mode of the evaluation", choices=["cross", "in"])
     parser.add_argument("--train_only", action="store_true", help="Train the baseline only")
     parser.add_argument("--eval_only", action="store_true", help="Evaluate the baseline only")
-    parser.add_argument("--metrics", type=str, nargs="+", default=["eer"], help="Metrics to evaluate")
+    parser.add_argument("--metric", type=str, nargs="+", default=["eer"], help="Metrics to evaluate")
     parser.add_argument("--data_dir", type=str, default=None, help="Path to the data directory")
     args = parser.parse_args()
 
