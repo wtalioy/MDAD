@@ -24,17 +24,18 @@ def main(args):
     
     os.makedirs("logs", exist_ok=True)
     
-    for baseline in args.baseline:
-        baseline = BASELINE_MAP[baseline](**vars(args))
-        for dataset in args.dataset:
-            dataset = DATASET_MAP[dataset](**vars(args))
-            logger.info(f"Evaluating {baseline.name} on {dataset.name} with metrics: {args.metrics} in {args.mode}-domain mode")
+    for dataset in args.dataset:
+        logger.info(f"Preparing {dataset} ...")
+        dataset = DATASET_MAP[dataset](**vars(args))
+        for baseline in args.baseline:
+            baseline = BASELINE_MAP[baseline](**vars(args))
             log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
+            logger.info(f"Evaluating {baseline.name} on {dataset.name} with metric: {args.metric} in {args.mode}-domain mode")
 
             results = None
             if args.mode == "cross":
                 if not args.train_only:
-                    results = dataset.evaluate(baseline, args.metrics)
+                    results = dataset.evaluate(baseline, args.metric)
             elif args.mode == "in":
                 if not args.eval_only:
                     logger.info("Training baseline ...")
@@ -42,7 +43,7 @@ def main(args):
                     dataset.train(baseline)
                 if not args.train_only:
                     logger.info("Evaluating baseline ...")
-                    results = dataset.evaluate(baseline, args.metrics, in_domain=True)
+                    results = dataset.evaluate(baseline, args.metric, in_domain=True)
                     logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
                 else:
                     continue
