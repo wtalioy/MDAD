@@ -10,7 +10,7 @@ from config import Label
 
 class PartialFake(BaseDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
-        super().__init__(data_dir or "data/PartialFake", *args, **kwargs)
+        super().__init__(os.path.join(data_dir or "data", "PartialFake"), *args, **kwargs)
         self.name = "PartialFake"
 
     def _load_meta(self):

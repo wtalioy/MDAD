@@ -1,14 +1,14 @@
 import os
 import librosa
 import numpy as np
-from typing import List
+from typing import List, Optional
 from tqdm import tqdm
 import json
 from baselines import Baseline
 from config import Label
 
 class BaseDataset:
-    def __init__(self, data_dir: str, *args, **kwargs):
+    def __init__(self, data_dir: Optional[str] = None, *args, **kwargs):
         self.name = "BaseDataset"
         self.data_dir = data_dir
         self.splits = ['train', 'dev', 'test']

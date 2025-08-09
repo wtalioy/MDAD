@@ -9,7 +9,7 @@ from config import Label
 
 class InTheWild(BaseDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
-        super().__init__(data_dir or "data/release_in_the_wild", *args, **kwargs)
+        super().__init__(os.path.join(data_dir or "data", "release_in_the_wild"), *args, **kwargs)
         self.name = "in-the-wild"
 
     def _load_meta(self):

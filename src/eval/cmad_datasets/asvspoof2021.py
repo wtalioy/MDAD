@@ -8,10 +8,9 @@ from baselines import Baseline
 from config import Label
 
 class ASVspoof2021(BaseDataset):
-    def __init__(self, data_dir=None, subset="LA", *args, **kwargs):
+    def __init__(self, subset="LA", *args, **kwargs):
         self.subset = subset
-        data_dir = os.path.join(data_dir or "data/ASVspoof2021", f"ASVspoof2021_{subset}_eval")
-        super().__init__(data_dir)
+        super().__init__()
         self.name = f"ASVspoof2021_{subset}"
 
     def _load_meta(self):

@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_only", action="store_true", help="Train the baseline only")
     parser.add_argument("--eval_only", action="store_true", help="Evaluate the baseline only")
     parser.add_argument("--metric", type=str, nargs="+", default=["eer"], help="Metrics to evaluate")
-    parser.add_argument("--data_dir", type=str, default=None, help="Path to the data directory")
+    parser.add_argument("--data_dir", type=str, default="data", help="Path to the data directory")
     args = parser.parse_args()
 
     main(args)
