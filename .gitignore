@@ -1,5 +1,5 @@
 # Weights and checkpoints
-*.pth
+*.pt
 
 # IDE and Editor specific files
 .vscode/

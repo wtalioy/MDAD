@@ -1,53 +1,79 @@
 from typing import Dict, Any, cast, List, Tuple, Optional
-import soundfile as sf
+import os
+import librosa
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
 import torch
+import torch.nn as nn
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
+from datasets import load_dataset
 from sklearn.metrics import roc_curve
-from eval.baselines.base import Baseline
-from eval.baselines.ardetect.mmd_model import ModelLoader
-from eval.baselines.ardetect.mmd_utils import MMD_3_Sample_Test
-from eval.config import Label
-
-# Fix datasets import conflict by temporarily modifying sys.path
-import sys
-_original_path = sys.path.copy()
-sys.path = [p for p in sys.path if not (p.endswith('src') or p.endswith('src/eval'))]
-try:
-    from datasets import load_dataset as hf_load_dataset
-finally:
-    sys.path = _original_path
+from baselines import Baseline
+from baselines.ardetect.mmd_model import ModelLoader
+from baselines.ardetect.mmd_utils import MMD_3_Sample_Test
+from config import Label
 
 class ARDetect(Baseline):
     def __init__(self,
-                 wav2vec_model_path: Optional[str] = None,
                  mmd_model_path: str = "src/eval/baselines/ardetect/mmd.pth",
                  device: str = "cuda",
                  **kwargs):
         self.name = "ARDetect"
+        self.cache_dir = os.path.join(os.path.dirname(__file__), "cache")
+        os.makedirs(self.cache_dir, exist_ok=True)
         self.device = device
         self.sample_rate = 16000
         self.segment_sec = 0.625
         self.supported_metrics = ['eer']
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
-        self.model = Wav2Vec2Model.from_pretrained(wav2vec_model_path or "facebook/wav2vec2-xls-r-2b")
+        # Check for multiple GPUs
+        self.num_gpus = torch.cuda.device_count() if device == "cuda" else 1
+        logger.info(f"Using {self.num_gpus} GPU(s)")
+
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("/home/ruimingwang/AR-Detect/cache/extractors/wav2vec2-xls-r-2b")
+        self.model = Wav2Vec2Model.from_pretrained("/home/ruimingwang/AR-Detect/cache/extractors/wav2vec2-xls-r-2b")
+        
+        # Enable multi-GPU support for Wav2Vec2 model
+        if self.num_gpus > 1:
+            self.model = nn.DataParallel(self.model)
         self.model = self.model.to(device).eval()
 
         self.net = ModelLoader.from_pretrained(model_path=mmd_model_path, device=device)
+        # Enable multi-GPU support for MMD model
+        if self.num_gpus > 1:
+            self.net.model = nn.DataParallel(self.net.model)
 
         self.real_data, self.fake_data = self._load_ref_data()
-        self.real_features = self._load_features(self.real_data)
-        self.fake_features = self._load_features(self.fake_data)
+        self.real_features, self.fake_features = self._load_ref_features()
+
+    def _load_ref_features(self) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        batch_size = 8 * self.num_gpus
+        if not os.path.exists(os.path.join(self.cache_dir, "real_ref_features.pt")):
+            logger.info(f"Loading real features with batch size {batch_size}")
+            real_features = self._load_features(self.real_data, batch_size=batch_size)
+            torch.save(real_features, os.path.join(self.cache_dir, "real_ref_features.pt"))
+            logger.info(f"Real features cached at {os.path.join(self.cache_dir, 'real_ref_features.pt')}")
+        else:
+            real_features = torch.load(os.path.join(self.cache_dir, "real_ref_features.pt"))
+            logger.info(f"Real features loaded from cache at {os.path.join(self.cache_dir, 'real_ref_features.pt')}")
+        if not os.path.exists(os.path.join(self.cache_dir, "fake_ref_features.pt")):
+            logger.info(f"Loading fake features with batch size {batch_size}")
+            fake_features = self._load_features(self.fake_data, batch_size=batch_size)
+            torch.save(fake_features, os.path.join(self.cache_dir, "fake_ref_features.pt"))
+            logger.info(f"Fake features cached at {os.path.join(self.cache_dir, 'fake_ref_features.pt')}")
+        else:
+            fake_features = torch.load(os.path.join(self.cache_dir, "fake_ref_features.pt"))
+            logger.info(f"Fake features loaded from cache at {os.path.join(self.cache_dir, 'fake_ref_features.pt')}")
+        return real_features, fake_features
 
     def _load_ref_data(self):
         return self._load_asvspoof()
     
-    def _load_features(self, audio_data: List[np.ndarray], batch_size: int = 8) -> List[torch.Tensor]:
+    def _load_features(self, audio_data: List[np.ndarray], batch_size: int = 4) -> List[torch.Tensor]:
         features = []
-        for i in tqdm(range(0, len(audio_data), batch_size), desc="Extracting features"):
+        
+        for i in range(0, len(audio_data), batch_size):
             batch_audio = audio_data[i:i + batch_size]
 
             batch_inputs = []
@@ -56,35 +82,68 @@ class ARDetect(Baseline):
                     audio_array,
                     sampling_rate=self.sample_rate,
                     padding="max_length",
-                    max_length=25000,
+                    max_length=10000,
                     truncation=True,
                     return_tensors="pt"
                 )
                 batch_inputs.append(inputs)
             
             if batch_inputs:
-                batch_features = []
-                for inputs in batch_inputs:
-                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                    outputs = self.model(**inputs)
-                    batch_features.append(outputs.last_hidden_state.cpu())
-                features.extend(batch_features)
+                if len(batch_inputs) > 1:
+                    # Stack inputs for batch processing
+                    stacked_inputs = {}
+                    for key in batch_inputs[0].keys():
+                        stacked_inputs[key] = torch.cat([inp[key] for inp in batch_inputs], dim=0)
+                    stacked_inputs = {k: v.to(self.device) for k, v in stacked_inputs.items()}
+                    
+                    # Process batch and immediately move to CPU
+                    with torch.no_grad():
+                        outputs = self.model(**stacked_inputs)
+                        # Move to CPU immediately and detach from computation graph
+                        batch_features = outputs.last_hidden_state.detach().cpu()
+                        batch_features = torch.split(batch_features, 1, dim=0)
+                        features.extend([feat for feat in batch_features])
+                        
+                    # Cleanup GPU memory
+                    del stacked_inputs, outputs, batch_features
+                else:
+                    # Single item processing
+                    inputs = {k: v.to(self.device) for k, v in batch_inputs[0].items()}
+                    with torch.no_grad():
+                        outputs = self.model(**inputs)
+                        # Move to CPU immediately and detach from computation graph
+                        feature = outputs.last_hidden_state.detach().cpu()
+                        features.append(feature)
+                        
+                    # Cleanup GPU memory
+                    del inputs, outputs
+                
+                # Clear GPU cache after each batch
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            
+            # Cleanup batch inputs
+            del batch_inputs, batch_audio
         
         return features
 
 
-    def _load_asvspoof(self, limit: int = 1024) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+
+    def _load_asvspoof(self, limit: int = 512) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         real_data = []
         fake_data = []
-        data = hf_load_dataset("Bisher/ASVspoof_2019_LA", split="train")
+        data = load_dataset("Bisher/ASVspoof_2019_LA", split="train")
+        
         for item in data:
             item = cast(Dict[str, Any], item)
             if item["key"] == 0 and len(real_data) < limit:
                 real_data.append(item["audio"]["array"])
             elif item["key"] == 1 and len(fake_data) < limit:
                 fake_data.append(item["audio"]["array"])
-            else:
-                continue
+            
+            # Break early if both lists are full
+            if len(real_data) >= limit and len(fake_data) >= limit:
+                break
+                
         return real_data, fake_data
 
 
@@ -98,7 +157,7 @@ class ARDetect(Baseline):
         for i in range(num_full_segments):
             start_frame = i * segment_length
             end_frame = start_frame + segment_length
-            audio_segments.append(audio[:, start_frame:end_frame])
+            audio_segments.append(audio[start_frame:end_frame])
 
         remaining_frames = total_frames % segment_length
 
@@ -108,66 +167,45 @@ class ARDetect(Baseline):
             else:
                 if len(audio_segments) >= 1:
                     last_segment = audio_segments.pop()
-                    combined_segment = np.concatenate((last_segment, audio[:, num_full_segments * segment_length:]), axis=1)
+                    combined_segment = np.concatenate((last_segment, audio[num_full_segments * segment_length:]), axis=0)
                     audio_segments.append(combined_segment)
                 else:
-                    audio_segments.append(audio[:, num_full_segments * segment_length:])
+                    audio_segments.append(audio[num_full_segments * segment_length:])
 
         return audio_segments
 
 
-    def evaluate(self, data: List[str], labels: np.ndarray, metrics: List[str]) -> dict:
-        feature_list = []
-        for audio_path in data:
-            audio, sr = sf.read(audio_path)
-            if sr != self.sample_rate:
-                import librosa
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            segments = self._segment_audio(audio)
-            feature_list.append(self._load_features(segments))
-        
+    @torch.no_grad()
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         results = {}
         for metric in metrics:
             if metric not in self.supported_metrics:
                 raise ValueError(f"Unsupported metric: {metric}")
             func = getattr(self, f"_evaluate_{metric}")
-            metric_rst = func(feature_list, labels)
+            metric_rst = func(data, labels, sr=sr)
             results[metric] = metric_rst
 
         return results
 
 
-    def _evaluate_eer(self, feature_list: List[List[torch.Tensor]], labels: np.ndarray) -> float:
-        fea_real = feature_list[labels == Label.real.value]
-        fea_fake = feature_list[labels == Label.fake.value]
+    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, sr: int) -> float:
+        if Label.real != 1:
+            labels = 1 - labels
+        scores = []
+        for audio in tqdm(data, desc="Evaluating EER"):
+            if sr != self.sample_rate:
+                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
+            segments = self._segment_audio(audio)
+            if len(segments) > 1:
+                fea_test = self._load_features(segments, batch_size=8)
+                score = self._three_sample_test(fea_test, round=10)
+                scores.append(score)
+            else:
+                logger.warning(f"Audio too short to test")
+                scores.append(Label.real)
 
-        real_test_stats = []
-        generated_test_stats = []
-        
-        # For real test samples: compute test statistics against training distributions
-        for fea_test_real in fea_real:
-            stats = self._three_sample_test(fea_test_real, round=10)
-            real_test_stats.append(stats)
-        
-        # For generated test samples: compute test statistics against training distributions  
-        for fea_test_generated in fea_fake:
-            stats = self._three_sample_test(fea_test_generated, round=10)
-            generated_test_stats.append(stats)
-        
-        # Convert to numpy arrays for EER calculation
-        real_test_stats = np.array(real_test_stats)
-        generated_test_stats = np.array(generated_test_stats)
-        
-        # Remove any NaN values
-        real_test_stats = real_test_stats[~np.isnan(real_test_stats)]
-        generated_test_stats = generated_test_stats[~np.isnan(generated_test_stats)]
-        
-        if len(real_test_stats) == 0 or len(generated_test_stats) == 0:
-            logger.warning("No valid test statistics computed for EER calculation")
-            return 0.5
-        
-        # Compute EER using the test statistics
-        eer, eer_threshold = self._compute_eer(real_test_stats, generated_test_stats)
+        scores = np.array(scores)
+        eer, _ = self._compute_eer(scores, labels)
         
         return float(eer)
 
@@ -190,32 +228,47 @@ class ARDetect(Baseline):
         t_list = []
 
         for _ in range(max(round, 1)):
-            fea_real = fea_real[torch.randperm(len(fea_real))[:min_len]]
-            fea_generated = fea_generated[torch.randperm(len(fea_generated))[:min_len]]
-            fea_test = fea_test[torch.randperm(len(fea_test))[:min_len]]
+            fea_real_sample = fea_real[torch.randperm(len(fea_real))[:min_len]]
+            fea_generated_sample = fea_generated[torch.randperm(len(fea_generated))[:min_len]]
+            fea_test_sample = fea_test[torch.randperm(len(fea_test))[:min_len]]
+
+            # Use the MMD network
+            with torch.no_grad():
+                net_test = self.net(fea_test_sample)
+                net_real = self.net(fea_real_sample)
+                net_generated = self.net(fea_generated_sample)
 
             h_u, p_value, t = MMD_3_Sample_Test(
-                self.net(fea_test),
-                self.net(fea_real),
-                self.net(fea_generated),
-                fea_test.view(fea_test.shape[0], -1),
-                fea_real.view(fea_real.shape[0], -1),
-                fea_generated.view(fea_generated.shape[0], -1),
-                self.net.sigma,
-                self.net.sigma0_u,
-                self.net.ep,
+                net_test,
+                net_real,
+                net_generated,
+                fea_test_sample.view(fea_test_sample.shape[0], -1),
+                fea_real_sample.view(fea_real_sample.shape[0], -1),
+                fea_generated_sample.view(fea_generated_sample.shape[0], -1),
+                self.net.module.sigma if hasattr(self.net, 'module') else self.net.sigma,
+                self.net.module.sigma0_u if hasattr(self.net, 'module') else self.net.sigma0_u,
+                self.net.module.ep if hasattr(self.net, 'module') else self.net.ep,
                 0.05,
             )
         
             h_u_list.append(h_u)
             p_value_list.append(p_value)
             t_list.append(t)
+            
+            # Cleanup
+            del (fea_real_sample, fea_generated_sample, fea_test_sample,
+                 net_test, net_real, net_generated)
 
+        # Cleanup
+        del fea_real, fea_generated, fea_test
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        
         power = sum(h_u_list) / len(h_u_list) if h_u_list else 0.0
         return power
 
 
-    def _compute_eer(self, target_scores: np.ndarray, nontarget_scores: np.ndarray) -> Tuple[Any, Any]:
+
+    def _compute_eer(self, scores: np.ndarray, labels: np.ndarray) -> Tuple[Any, Any]:
         """
         Compute Equal Error Rate (EER) from target and nontarget scores.
         Args:
@@ -225,9 +278,6 @@ class ARDetect(Baseline):
             eer: Equal Error Rate (EER) value
             eer_threshold: Threshold at which EER occurs
         """
-        scores = np.concatenate([target_scores, nontarget_scores])
-        labels = np.concatenate([np.zeros(len(target_scores)), np.ones(len(nontarget_scores))])
-
         fpr, tpr, thresholds = roc_curve(labels, scores)
         fnr = 1 - tpr
 

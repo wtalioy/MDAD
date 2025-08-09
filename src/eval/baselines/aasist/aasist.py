@@ -1,241 +1,139 @@
 import torch
-import json
+import torch.nn as nn
+import os
 import numpy as np
-import soundfile as sf
-from typing import List, Union, Tuple, Optional
-from torch.utils.data import DataLoader, Dataset
+from typing import List, Optional
+from torch.utils.data import DataLoader
+from torchcontrib.optim import SWA
 from importlib import import_module
 from tqdm import tqdm
-from eval.baselines.base import Baseline
-from eval.config import Label
+from loguru import logger
+from sklearn.metrics import roc_curve
+from scipy.optimize import brentq
+from scipy.interpolate import interp1d
 
-class AASIST(Baseline):
-    def __init__(self, config_path: str = "src/eval/baselines/aasist/config/AASIST.conf", device: str = "cuda", **kwargs):
-        self.name = "AASIST"
-        self.device = device
-        self.model = self._load_model(config_path, device)
+from baselines.aasist.utils import create_optimizer
+
+from baselines import Baseline
+from config import Label
+
+class AASIST_Base(Baseline):
+    def __init__(self, model_name: str = "AASIST", device: str = "cuda", **kwargs):
+        super().__init__(device, **kwargs)
+        self.name = model_name
+        self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
+        model_args = self._load_model_config(os.path.dirname(__file__), model_name)
+        self.model = self._load_model(model_args)
         self.supported_metrics = ['eer', 'tdcf']
 
-    def _load_model(self, config_path: str, device: str):
-        with open(config_path, "r") as f_json:
-            config = json.loads(f_json.read())
-        model_config = config.get("model_config", {})
-        module = import_module("models.{}".format(model_config["architecture"]))
+    def _load_model(self, config: dict):
+        module = import_module("baselines.aasist.models.{}".format(config["architecture"]))
         _model = getattr(module, "Model")
-        model = _model(model_config).to(device)
-        model.load_state_dict(
-            torch.load(config["model_path"], map_location=device))
+        model = _model(config).to(self.device)
         return model
 
-    def _run_inference(self, data_loader: DataLoader) -> np.ndarray:
-        """
-        Run inference on the data loader and return scores and labels.
-        
-        Returns:
-            Tuple of (scores, labels) where:
-            - scores: CM scores for each sample
-        """
+    @torch.no_grad()
+    def _evaluate_eer(self, eval_loader: DataLoader) -> float:
         self.model.eval()
         scores = []
-        
-        with torch.no_grad():
-            for batch_data in tqdm(data_loader, desc="Running inference"):
-                # Handle different data loader formats
-                batch_x = batch_data
-                batch_x = batch_x.to(self.device)
-
-                # Run model inference
-                _, batch_out = self.model(batch_x)
+        labels = []
+        with tqdm(total = len(eval_loader), desc="Evaluating EER") as pbar:
+            for batch, label in eval_loader:
+                batch = batch.to(self.device)
+                _, batch_out = self.model(batch)
                 batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
-                scores.extend(batch_scores.tolist())     
+                scores.extend(batch_scores.tolist())
+                labels.extend(label)
+                pbar.update(1)
+        fpr, tpr, _ = roc_curve(labels, scores, pos_label=1)
+        eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
+        return float(eer)
 
-        return np.array(scores)
+    def _init_train(self, optim_config: dict):
+        self.optimizer, self.scheduler = create_optimizer(self.model.parameters(), optim_config)
+        self.optimizer_swa = SWA(self.optimizer)
+        weight = torch.FloatTensor([0.1, 0.9]).to(self.device)
+        self.criterion = nn.CrossEntropyLoss(weight=weight)
 
-    def _compute_det_curve(self, target_scores: np.ndarray, nontarget_scores: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Compute Detection Error Tradeoff (DET) curve."""
-        n_scores = target_scores.size + nontarget_scores.size
-        all_scores = np.concatenate((target_scores, nontarget_scores))
-        labels = np.concatenate(
-            (np.ones(target_scores.size), np.zeros(nontarget_scores.size)))
+    def _train_epoch(self, epoch: int, data_loader: DataLoader):
+        running_loss = 0
+        num_total = 0.0
+        ii = 0
+        self.model.train()
 
-        # Sort labels based on scores
-        indices = np.argsort(all_scores, kind='mergesort')
-        labels = labels[indices]
+        with tqdm(total = len(data_loader), desc="Training") as pbar:
+            for batch_x, batch_y in data_loader:
+                batch_size = batch_x.size(0)
+                num_total += batch_size
+                ii += 1
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.view(-1).type(torch.int64).to(self.device)
+                _, batch_out = self.model(batch_x)
+                batch_loss = self.criterion(batch_out, batch_y)
+                running_loss += batch_loss.item() * batch_size
+                self.optimizer.zero_grad()
+                batch_loss.backward()
+                self.optimizer.step()
+                self.scheduler.step()
+                pbar.set_description('epoch: %d, cce:%.3f'%(epoch, batch_loss))
+                pbar.update(1)
 
-        # Compute false rejection and false acceptance rates
-        tar_trial_sums = np.cumsum(labels)
-        nontarget_trial_sums = nontarget_scores.size - \
-            (np.arange(1, n_scores + 1) - tar_trial_sums)
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
+        train_config = self._load_train_config(os.path.dirname(__file__), dataset_name)
+        train_loader = self._prepare_loader(train_data, train_labels, batch_size=train_config['batch_size'])
+        eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=16)
+        optim_config = train_config["optim_config"]
+        optim_config["steps_per_epoch"] = len(train_loader)
+        optim_config["epochs"] = train_config['num_epochs']
 
-        # false rejection rates
-        frr = np.concatenate(
-            (np.atleast_1d(0), tar_trial_sums / target_scores.size))
-        far = np.concatenate((np.atleast_1d(1), nontarget_trial_sums /
-                              nontarget_scores.size))  # false acceptance rates
-        # Thresholds are the sorted scores
-        thresholds = np.concatenate(
-            (np.atleast_1d(all_scores[indices[0]] - 0.001), all_scores[indices]))
+        log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
+        logger.info(f"Training AASIST on {dataset_name}")
 
-        return frr, far, thresholds
+        self._init_train(optim_config)
 
-    def compute_eer(self, target_scores: np.ndarray, nontarget_scores: np.ndarray) -> Tuple[float, float]:
-        """
-        Compute Equal Error Rate (EER) and the corresponding threshold.
-        
-        Args:
-            target_scores: Scores for bonafide (target) samples
-            nontarget_scores: Scores for spoof (nontarget) samples
-            
-        Returns:
-            Tuple of (EER, threshold)
-        """
-        frr, far, thresholds = self._compute_det_curve(target_scores, nontarget_scores)
-        abs_diffs = np.abs(frr - far)
-        min_index = np.argmin(abs_diffs)
-        eer = np.mean((frr[min_index], far[min_index]))
-        return float(eer), float(thresholds[min_index])
+        best_eer = 100
+        best_epoch = 0
+        save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        for epoch in range(train_config['num_epochs']):
+            self._train_epoch(epoch, train_loader)
+            eer = self._evaluate_eer(eval_loader)
+            logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
+            if eer < best_eer:
+                best_eer = eer
+                best_epoch = epoch
+                torch.save(self.model.state_dict(), save_path)
+                logger.info(f"New best EER: {100*best_eer:.2f}% at epoch {epoch}")
+            self.optimizer_swa.update_swa()
 
-    def compute_tDCF(self, bonafide_scores: np.ndarray, spoof_scores: np.ndarray, 
-                     Pfa_asv: float = 0.01, Pmiss_asv: float = 0.01, 
-                     Pmiss_spoof_asv: Optional[float] = None) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Compute Tandem Detection Cost Function (t-DCF).
-        
-        Args:
-            bonafide_scores: CM scores for bonafide samples
-            spoof_scores: CM scores for spoof samples
-            Pfa_asv: False alarm rate of ASV system (default: 0.01)
-            Pmiss_asv: Miss rate of ASV system (default: 0.01)
-            Pmiss_spoof_asv: Miss rate of spoof samples in ASV (default: None, uses Pmiss_asv)
-            
-        Returns:
-            Tuple of (normalized t-DCF curve, CM thresholds)
-        """
-        # Default cost model parameters
-        cost_model = {
-            'Pspoof': 0.05,
-            'Ptar': 0.95 * 0.99,
-            'Pnon': 0.95 * 0.01,
-            'Cmiss': 1,
-            'Cfa': 10,
-            'Cmiss_asv': 1,
-            'Cfa_asv': 10,
-            'Cmiss_cm': 1,
-            'Cfa_cm': 10,
-        }
-        
-        if Pmiss_spoof_asv is None:
-            Pmiss_spoof_asv = Pmiss_asv
-            
-        # Sanity checks
-        combined_scores = np.concatenate((bonafide_scores, spoof_scores))
-        if np.isnan(combined_scores).any() or np.isinf(combined_scores).any():
-            raise ValueError('Scores contain nan or inf.')
-            
-        n_uniq = np.unique(combined_scores).size
-        if n_uniq < 3:
-            raise ValueError('You should provide soft CM scores - not binary decisions')
+        self.optimizer_swa.swap_swa_sgd()
+        self.optimizer_swa.bn_update(train_loader, self.model, device=self.device)
+        logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
+        logger.remove(log_id)
 
-        # Obtain miss and false alarm rates of CM
-        Pmiss_cm, Pfa_cm, CM_thresholds = self._compute_det_curve(bonafide_scores, spoof_scores)
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
+        if in_domain:
+            self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
+        else:
+            self.model.load_state_dict(torch.load(self.default_ckpt))
+            if Label.real != 1:
+                labels = 1 - labels
 
-        # Constants for t-DCF computation
-        C1 = cost_model['Ptar'] * (cost_model['Cmiss_cm'] - cost_model['Cmiss_asv'] * Pmiss_asv) - \
-            cost_model['Pnon'] * cost_model['Cfa_asv'] * Pfa_asv
-        C2 = cost_model['Cfa_cm'] * cost_model['Pspoof'] * (1 - Pmiss_spoof_asv)
+        data_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=16)
 
-        # Sanity check of the weights
-        if C1 < 0 or C2 < 0:
-            raise ValueError('Cannot evaluate tDCF with negative weights')
-
-        # Obtain t-DCF curve for all thresholds
-        tDCF = C1 * Pmiss_cm + C2 * Pfa_cm
-
-        # Normalized t-DCF
-        tDCF_norm = tDCF / np.minimum(C1, C2)
-
-        return tDCF_norm, CM_thresholds
-
-    def evaluate(self, data: List[str], metrics: List[str], 
-                  labels: np.ndarray, 
-                  asv_scores: Optional[dict] = None) -> dict:
-        def pad_random(x: np.ndarray, max_len: int = 64600):
-            x_len = x.shape[0]
-            # if duration is already long enough
-            if x_len >= max_len:
-                stt = np.random.randint(x_len - max_len)
-                return x[stt:stt + max_len]
-
-            # if too short
-            num_repeats = int(max_len / x_len) + 1
-            padded_x = np.tile(x, (num_repeats))[:max_len]
-            return padded_x
-
-        class CustomDataset(Dataset):
-            def __init__(self, data):
-                self.paths = data
-
-            def __len__(self):
-                return len(self.paths)
-
-            def __getitem__(self, idx):
-                # Assuming data is a list of file paths or similar
-                x, _ = sf.read(self.paths[idx])
-                x_pad = pad_random(x)
-                x_inp = torch.tensor(x_pad)
-                return x_inp
-
-        # Create DataLoader
-        dataset = CustomDataset(data)
-        data_loader = DataLoader(dataset, batch_size=4, shuffle=True, drop_last=True, pin_memory=True)
-
-        # Run inference to get predictions
-        scores = self._run_inference(data_loader)
-            
-        # Separate bonafide and spoof scores based on labels
-        bonafide_mask = labels == Label.real.value
-        spoof_mask = labels == Label.fake.value
-
-        bonafide_scores = scores[bonafide_mask]
-        spoof_scores = scores[spoof_mask]
-        
-        if len(bonafide_scores) == 0 or len(spoof_scores) == 0:
-            raise ValueError("Need both bonafide and spoof samples for evaluation")
-        
         results = {}
-        
-        for m in metrics:
-            if m not in self.supported_metrics:
-                raise ValueError(f"Unsupported metric: {m}")
-            
-            if m == 'eer':
-                eer, threshold = self.compute_eer(bonafide_scores, spoof_scores)
-                results['eer'] = float(eer)
-                results['eer_threshold'] = float(threshold)
-                
-            elif m == 'tdcf':
-                # Use default ASV parameters if not provided
-                Pfa_asv = 0.01
-                Pmiss_asv = 0.01
-                Pmiss_spoof_asv = None
-                
-                if asv_scores is not None:
-                    Pfa_asv = asv_scores.get('Pfa_asv', Pfa_asv)
-                    Pmiss_asv = asv_scores.get('Pmiss_asv', Pmiss_asv)
-                    Pmiss_spoof_asv = asv_scores.get('Pmiss_spoof_asv', Pmiss_spoof_asv)
-                
-                try:
-                    tDCF_curve, thresholds = self.compute_tDCF(
-                        bonafide_scores, spoof_scores, 
-                        Pfa_asv, Pmiss_asv, Pmiss_spoof_asv
-                    )
-                    min_tDCF_index = np.argmin(tDCF_curve)
-                    min_tDCF = tDCF_curve[min_tDCF_index]
-                    
-                    results['min_tdcf'] = float(min_tDCF)
-                    results['tdcf_threshold'] = float(thresholds[min_tDCF_index])
-                except Exception as e:
-                    print(f"Warning: Could not compute t-DCF: {e}")
-                    results['min_tdcf'] = None
-        
+        for metric in metrics:
+            if metric not in self.supported_metrics:
+                raise ValueError(f"Unsupported metric: {metric}")
+            func = getattr(self, f"_evaluate_{metric}")
+            metric_rst = func(data_loader)
+            results[metric] = metric_rst
         return results
+
+class AASIST(AASIST_Base):
+    def __init__(self, device: str = "cuda", **kwargs):
+        super().__init__("AASIST", device, **kwargs)
+
+class AASIST_L(AASIST_Base):
+    def __init__(self, device: str = "cuda", **kwargs):
+        super().__init__("AASIST-L", device, **kwargs)

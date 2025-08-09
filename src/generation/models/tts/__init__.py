@@ -6,6 +6,8 @@ from .tacotron2 import Tacotron2
 from .bark import Bark
 from .melotts import MeloTTS
 from .elevenlabs_tts import ElevenLabsTTS
+from .gemini_tts import GeminiTTS
+from .gpt4omini_tts import GPT4oMiniTTS
 
 TTS_MODEL_MAP = {
     "vits": VITS,
@@ -14,7 +16,9 @@ TTS_MODEL_MAP = {
     "tacotron2": Tacotron2,
     "bark": Bark,
     "melotts": MeloTTS,
-    "elevenlabs_tts": ElevenLabsTTS,
+    "elevenlabs": ElevenLabsTTS,
+    "geminitts": GeminiTTS,
+    "gpt4omini": GPT4oMiniTTS,
 }
 
 __all__ = ["BaseTTS", "TTS_MODEL_MAP"]

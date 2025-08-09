@@ -1,5 +1,5 @@
-from enum import Enum
+from enum import IntEnum
 
-class Label(Enum):
+class Label(IntEnum):
     fake = 0
     real = 1
