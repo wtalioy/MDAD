@@ -264,7 +264,7 @@ def main():
     print(f"Average Fake Duration: {format_duration(total_fake_avg)}")
     
     # Write to CSV
-    csv_filename = 'data/duration_summary.csv'
+    csv_filename = 'duration_summary.csv'
     with open(csv_filename, 'w', newline='') as csvfile:
         fieldnames = ['Domain', 'Real_Duration_Formatted', 'Real_File_Count', 'Real_Avg_Duration_Formatted',
                      'Fake_Duration_Formatted', 'Fake_File_Count', 'Fake_Avg_Duration_Formatted',
