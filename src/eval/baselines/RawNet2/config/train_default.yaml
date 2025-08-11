@@ -10,4 +10,3 @@ lr_decay: keras
 
 # Flags
 amsgrad: true
-multi_gpu: true
