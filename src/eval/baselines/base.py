@@ -60,8 +60,8 @@ class Baseline:
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
         return loader
 
-    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int = 16000, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
-    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str) -> str:
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
         raise NotImplementedError("This method should be overridden by subclasses.")
