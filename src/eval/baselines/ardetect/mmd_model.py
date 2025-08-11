@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import math
-from dataclasses import dataclass
+from typing import Optional
 
 from transformers.models.bert import (
     BertPreTrainedModel,
@@ -40,13 +40,13 @@ class BertLayerNorm(nn.Module):
 
 
 class mlp_meta(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: dict):
         super().__init__()
         self.mlp = nn.Sequential(
-            nn.Linear(config.hid_dim, config.hid_dim),
+            nn.Linear(config["hid_dim"], config["hid_dim"]),
             GeLU(),
-            BertLayerNorm(config.hid_dim, eps=1e-12),
-            nn.Dropout(config.dropout),
+            BertLayerNorm(config["hid_dim"], eps=1e-12),
+            nn.Dropout(config["dropout"]),
         )
 
     def forward(self, x):
@@ -54,7 +54,7 @@ class mlp_meta(nn.Module):
 
 
 class Bert_Transformer_Layer(BertPreTrainedModel):
-    def __init__(self, fusion_config):
+    def __init__(self, fusion_config: dict):
         super().__init__(BertConfig(**fusion_config))
         bertconfig_fusion = BertConfig(**fusion_config)
         self.encoder = BertEncoder(bertconfig_fusion)
@@ -108,41 +108,28 @@ class Bert_Transformer_Layer(BertPreTrainedModel):
                 all_attention = None
 
         return output, all_attention
-    
-
-@dataclass
-class MMDConfig:
-    in_dim: int = 1920
-    hid_dim: int = 2048
-    out_dim: int = 300
-    token_num: int = 31
-    dropout: float = 0.2
-    num_mlp: int = 0
-    transformer_flag: bool = True
-    num_hidden_layers: int = 1
-default_config = MMDConfig()
 
 
-class mmdModel(nn.Module):
+class MMDBaseModel(nn.Module):
     def __init__(
         self,
-        config: MMDConfig,
+        config: dict,
         mlp_flag=True,
     ):
-        super(mmdModel, self).__init__()
-        self.num_mlp = config.num_mlp
-        self.transformer_flag = config.transformer_flag
+        super(MMDBaseModel, self).__init__()
+        self.num_mlp = config["num_mlp"]
+        self.transformer_flag = config["transformer_flag"]
         self.mlp_flag = mlp_flag
-        token_num = config.token_num
+        token_num = config.get("token_num", 31)
         self.mlp = nn.Sequential(
-            nn.Linear(config.in_dim, config.hid_dim),
+            nn.Linear(config["in_dim"], config["hid_dim"]),
             GeLU(),
-            BertLayerNorm(config.hid_dim, eps=1e-12),
-            nn.Dropout(config.dropout),
+            BertLayerNorm(config["hid_dim"], eps=1e-12),
+            nn.Dropout(config["dropout"]),
         )
         self.fusion_config = {
-            "hidden_size": config.in_dim,
-            "num_hidden_layers": config.num_hidden_layers,
+            "hidden_size": config["in_dim"],
+            "num_hidden_layers": config["num_hidden_layers"],
             "num_attention_heads": 4,
             "output_attentions": True,
             "output_hidden_states": False,
@@ -153,7 +140,7 @@ class mmdModel(nn.Module):
             self.mlp2 = nn.ModuleList([mlp_meta(config) for _ in range(self.num_mlp)])
         if self.transformer_flag:
             self.transformer = Bert_Transformer_Layer(self.fusion_config)
-        self.feature = nn.Linear(config.hid_dim * token_num, config.out_dim)
+        self.feature = nn.Linear(config["hid_dim"] * token_num, config["out_dim"])
 
     def forward1(self, features):
         features = features
@@ -189,19 +176,17 @@ class mmdModel(nn.Module):
         return features
     
 
-class ModelLoader:
-    def __init__(self, sigma, sigma0_u, ep, config: MMDConfig, state_dict: dict, device: str):
-        self.sigma = sigma
-        self.sigma0_u = sigma0_u
-        self.ep = ep
+class MMDModel:
+    def __init__(self, config: dict, device: str):
+        self.sigma = torch.tensor(config.get("sigma", 30.0) ** 2).to(device, dtype=torch.float)
+        self.sigma0_u = torch.tensor(config.get("sigma0_u", 45.0) ** 2).to(device, dtype=torch.float)
+        self.ep = torch.tensor(config.get("ep", 10.0) ** 2).to(device, dtype=torch.float)
 
-        self.model = mmdModel(config=config).to(device)
-        self.model.load_state_dict(state_dict)
+        self.basemodel = MMDBaseModel(config=config).to(device)
 
-    @staticmethod
-    def from_pretrained(model_path: str, config: MMDConfig = default_config, device: str = "cuda"):
+    def load_state_dict(self, ckpt_path: str):
         """Load a trained model from checkpoint."""
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(ckpt_path, map_location=self.device)
         state_dict = checkpoint["net"]
 
         # Remove "module." prefix if it exists
@@ -214,12 +199,22 @@ class ModelLoader:
                 new_state_dict[key] = value
         state_dict = new_state_dict
             
-        sigma = checkpoint.get("sigma", 30.0)
-        sigma0_u = checkpoint.get("sigma0_u", 45.0) 
-        ep = checkpoint.get("ep", 10.0)
+        self.sigma = torch.tensor(checkpoint["sigma"]).to(self.device, dtype=torch.float)
+        self.sigma0_u = torch.tensor(checkpoint["sigma0_u"]).to(self.device, dtype=torch.float)
+        self.ep = torch.tensor(checkpoint["ep"]).to(self.device, dtype=torch.float)
         
-        return ModelLoader(sigma, sigma0_u, ep, config, state_dict, device)
-    
+        self.basemodel.load_state_dict(state_dict)
+
+    def save_state_dict(self, ckpt_path: str):
+        """Save the model state dictionary."""
+        torch.save({
+            "net": self.basemodel.state_dict(),
+            "sigma": self.sigma.item(),
+            "sigma0_u": self.sigma0_u.item(),
+            "ep": self.ep.item()
+        }, ckpt_path)
+
+        
     def __call__(self, x):
         """Forward pass through the model."""
-        return self.model(x)
+        return self.basemodel(x)

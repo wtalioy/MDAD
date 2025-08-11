@@ -1,4 +1,5 @@
 import torch
+from loguru import logger
 
 
 def flexible_kernel(X, Y, X_org, Y_org, sigma, sigma0=0.1, epsilon=1e-08):
@@ -166,3 +167,120 @@ def MMD_3_Sample_Test(
         h = 1
 
     return h, p_value.item(), t.item()
+
+
+def h1_mean_var_gram(
+    Kx,
+    Ky,
+    Kxy,
+    is_var_computed,
+    use_1sample_U=True,
+    is_unbiased=True,
+    coeff_xy=2,
+    is_yy_zero=False,
+    is_xx_zero=False,
+):
+    """compute value of MMD and std of MMD using kernel matrix."""
+    if not is_yy_zero:
+        coeff_yy = 1
+    else:
+        coeff_yy = 0
+    if not is_xx_zero:
+        coeff_xx = 1
+    else:
+        coeff_xx = 0
+    Kxxy = torch.cat((Kx, Kxy), 1)
+    Kyxy = torch.cat((Kxy.transpose(0, 1), Ky), 1)
+    Kxyxy = torch.cat((Kxxy, Kyxy), 0)
+    nx = Kx.shape[0]
+    ny = Ky.shape[0]
+
+    if is_unbiased:
+        xx = torch.div((torch.sum(Kx) - torch.sum(torch.diag(Kx))), (nx * (nx - 1)))
+        yy = torch.div((torch.sum(Ky) - torch.sum(torch.diag(Ky))), (ny * (ny - 1)))
+        # one-sample U-statistic.
+        if use_1sample_U:
+            xy = torch.div(
+                (torch.sum(Kxy) - torch.sum(torch.diag(Kxy))), (nx * (ny - 1))
+            )
+        else:
+            xy = torch.div(torch.sum(Kxy), (nx * ny))
+        mmd2 = xx * coeff_xx - coeff_xy * xy + yy * coeff_yy
+    else:
+        xx = torch.div((torch.sum(Kx)), (nx * nx))
+        yy = torch.div((torch.sum(Ky)), (ny * ny))
+        # one-sample U-statistic.
+        if use_1sample_U:
+            xy = torch.div((torch.sum(Kxy)), (nx * ny))
+        else:
+            xy = torch.div(torch.sum(Kxy), (nx * ny))
+        mmd2 = xx * coeff_xx - coeff_xy * xy + yy * coeff_yy
+    if not is_var_computed:
+        return mmd2, None, Kxyxy
+    hh = Kx * coeff_xx + Ky * coeff_yy - (Kxy + Kxy.transpose(0, 1)) * coeff_xy / 2
+    V1 = torch.dot(hh.sum(1) / ny, hh.sum(1) / ny) / ny
+    V2 = (hh).sum() / (nx) / nx
+    varEst = 4 * (V1 - V2**2)
+    if varEst == 0.0:
+        logger.warning("error_var!!" + str(V1))
+    return mmd2, varEst, Kxyxy
+
+
+def MMDu(
+    Fea,
+    len_s,
+    Fea_org,
+    sigma,
+    sigma0=0.1,
+    epsilon=10 ** (-10),
+    is_smooth=True,
+    is_var_computed=True,
+    use_1sample_U=True,
+    is_unbiased=True,
+    coeff_xy=2,
+    is_yy_zero=False,
+    is_xx_zero=False,
+):
+    """compute value of deep-kernel MMD and std of deep-kernel MMD using merged data."""
+    X = Fea[0:len_s, :]  # fetch the sample 1 (features of deep networks)
+    Y = Fea[len_s:, :]  # fetch the sample 2 (features of deep networks)
+    X_org = Fea_org[0:len_s, :]  # fetch the original sample 1
+    Y_org = Fea_org[len_s:, :]  # fetch the original sample 2
+    L = 1  # generalized Gaussian (if L>1)
+
+    nx = X.shape[0]
+    ny = Y.shape[0]
+    Dxx = Pdist2(X, X)
+    Dyy = Pdist2(Y, Y)
+    Dxy = Pdist2(X, Y)
+    Dxx_org = Pdist2(X_org, X_org)
+    Dyy_org = Pdist2(Y_org, Y_org)
+    Dxy_org = Pdist2(X_org, Y_org)
+    K_Ix = torch.eye(nx).cuda()
+    K_Iy = torch.eye(ny).cuda()
+    if is_smooth:
+        Kx = (1 - epsilon) * torch.exp(
+            -((Dxx / sigma0) ** L) - Dxx_org / sigma
+        ) + epsilon * torch.exp(-Dxx_org / sigma)
+        Ky = (1 - epsilon) * torch.exp(
+            -((Dyy / sigma0) ** L) - Dyy_org / sigma
+        ) + epsilon * torch.exp(-Dyy_org / sigma)
+        Kxy = (1 - epsilon) * torch.exp(
+            -((Dxy / sigma0) ** L) - Dxy_org / sigma
+        ) + epsilon * torch.exp(-Dxy_org / sigma)
+    else:
+        Kx = torch.exp(-Dxx / sigma0)
+        Ky = torch.exp(-Dyy / sigma0)
+        Kxy = torch.exp(-Dxy / sigma0)
+
+    return h1_mean_var_gram(
+        Kx,
+        Ky,
+        Kxy,
+        is_var_computed,
+        use_1sample_U,
+        is_unbiased,
+        coeff_xy,
+        is_yy_zero,
+        is_xx_zero,
+    )

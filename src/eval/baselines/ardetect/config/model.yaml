@@ -1,0 +1,12 @@
+is_xx_zero: false
+is_yy_zero: false
+coeff_xy: 2.0
+mmdo_flag: false
+transformer_flag: true
+num_hidden_layers: 1
+num_mlp: 0
+hid_dim: 1024
+out_dim: 300
+epsilon: 10
+sigma: 30.0
+sigma0: 45.0
