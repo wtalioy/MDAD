@@ -4,7 +4,7 @@ from typing import List, Optional
 from torch.utils.data.dataloader import DataLoader
 import torch.nn as nn
 import numpy as np
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 from tqdm import tqdm
@@ -22,14 +22,9 @@ class RawGAT_ST(Baseline):
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", "RawGAT_ST_mul.pth")
         model_args = self._load_model_config(os.path.dirname(__file__))
         self.model = RawGAT_ST_Model(model_args, device).to(device)
-        self.supported_metrics = ["eer"]
+        self.supported_metrics = ["eer", "auroc"]
 
     def _init_train(self, args: dict):
-        if args['multi_gpu']:
-            self.model_to_save = self.model
-            self.model = nn.DataParallel(self.model_to_save).to(self.device)
-        else:
-            self.model_to_save = self.model
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args['lr'], weight_decay=args['weight_decay'])
         weight = torch.FloatTensor([0.1, 0.9]).to(self.device)
         self.criterion = nn.CrossEntropyLoss(weight=weight)
@@ -48,7 +43,7 @@ class RawGAT_ST(Baseline):
                 pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
                 pbar.update(1)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def _evaluate_eer(self, eval_loader: DataLoader) -> float:
         self.model.eval()
         scores = []
@@ -64,6 +59,21 @@ class RawGAT_ST(Baseline):
         fpr, tpr, _ = roc_curve(labels, scores, pos_label=1)
         eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
         return float(eer)
+
+    @torch.inference_mode()
+    def _evaluate_auroc(self, eval_loader: DataLoader) -> float:
+        self.model.eval()
+        scores = []
+        labels = []
+        with tqdm(total = len(eval_loader), desc="Evaluating AUROC") as pbar:
+            for batch, label in eval_loader:
+                batch = batch.to(self.device)
+                batch_out = self.model(batch, Freq_aug=False)
+                batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
+                scores.extend(batch_scores.tolist())
+                labels.extend(label)
+                pbar.update(1)
+        return float(roc_auc_score(labels, np.array(scores)))
 
     def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
@@ -86,12 +96,11 @@ class RawGAT_ST(Baseline):
             if eer < best_eer:
                 best_eer = eer
                 best_epoch = epoch
-                torch.save(self.model_to_save.state_dict(), save_path)
+                torch.save(self.model.state_dict(), save_path)
                 logger.info(f"New best EER: {100*best_eer:.2f}% at epoch {epoch}")
 
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
-        self.model = self.model_to_save
 
     def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:

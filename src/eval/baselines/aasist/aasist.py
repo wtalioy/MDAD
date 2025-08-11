@@ -8,7 +8,7 @@ from torchcontrib.optim import SWA
 from importlib import import_module
 from tqdm import tqdm
 from loguru import logger
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 
@@ -24,7 +24,7 @@ class AASIST_Base(Baseline):
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
         model_args = self._load_model_config(os.path.dirname(__file__), model_name)
         self.model = self._load_model(model_args)
-        self.supported_metrics = ['eer', 'tdcf']
+        self.supported_metrics = ['eer', 'tdcf', 'auroc']
 
     def _load_model(self, config: dict):
         module = import_module("baselines.aasist.models.{}".format(config["architecture"]))
@@ -129,6 +129,21 @@ class AASIST_Base(Baseline):
             metric_rst = func(data_loader)
             results[metric] = metric_rst
         return results
+
+    @torch.no_grad()
+    def _evaluate_auroc(self, eval_loader: DataLoader) -> float:
+        self.model.eval()
+        scores = []
+        labels = []
+        with tqdm(total = len(eval_loader), desc="Evaluating AUROC") as pbar:
+            for batch, label in eval_loader:
+                batch = batch.to(self.device)
+                _, batch_out = self.model(batch)
+                batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
+                scores.extend(batch_scores.tolist())
+                labels.extend(label)
+                pbar.update(1)
+        return float(roc_auc_score(labels, np.array(scores)))
 
 class AASIST(AASIST_Base):
     def __init__(self, device: str = "cuda", **kwargs):

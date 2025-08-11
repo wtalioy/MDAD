@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 from tqdm import tqdm
@@ -24,14 +24,9 @@ class RawNet2(Baseline):
         model_args = self._load_model_config(os.path.dirname(__file__))
         self.model = RawNetModel(model_args, device).to(device)
         
-        self.supported_metrics = ["eer"]
+        self.supported_metrics = ["eer", "auroc"]
 
     def _init_train(self, args: dict):
-        if args['multi_gpu']:
-            self.model_to_save = self.model
-            self.model = nn.DataParallel(self.model_to_save).to(self.device)
-        else:
-            self.model_to_save = self.model
         self.model.apply(init_weights)
         self.criterion = nn.CrossEntropyLoss()
         params = [
@@ -88,6 +83,20 @@ class RawNet2(Baseline):
         eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
         return float(eer)
 
+    @torch.no_grad()
+    def _evaluate_auroc(self, eval_loader: DataLoader) -> float:
+        self.model.eval()
+        scores = []
+        labels = []
+        with tqdm(total = len(eval_loader), desc="Evaluating AUROC") as pbar:
+            for batch, label in eval_loader:
+                batch = batch.to(self.device)
+                code = self.model(batch)
+                scores.extend(code[:, 1].cpu().numpy().ravel().tolist())
+                labels.extend(label)
+                pbar.update(1)
+        return float(roc_auc_score(labels, np.array(scores)))
+
     def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=args['bs'])
@@ -109,12 +118,11 @@ class RawNet2(Baseline):
             if eer < best_eer:
                 best_eer = eer
                 best_epoch = epoch
-                torch.save(self.model_to_save.state_dict(), save_path)
+                torch.save(self.model.state_dict(), save_path)
                 logger.info(f"New best EER: {100*best_eer:.2f}% at epoch {epoch}")
 
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
-        self.model = self.model_to_save
 
     def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:

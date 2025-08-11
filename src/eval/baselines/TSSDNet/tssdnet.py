@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
+from sklearn.metrics import roc_auc_score
 from baselines.TSSDNet.models import SSDNet1D, DilatedNet
 from baselines import Baseline
 from config import Label
@@ -17,7 +18,7 @@ class TSSDNet_Base(Baseline):
         self.name = ckpt
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{ckpt}.pth")
         self.model = self._load_model(ckpt)
-        self.supported_metrics = ["eer", "acc"]
+        self.supported_metrics = ["eer", "acc", "auroc"]
 
     def _load_model(self, ckpt: str):
         if ckpt == "Res-TSSDNet":
@@ -129,6 +130,17 @@ class TSSDNet_Base(Baseline):
         labels = torch.tensor(labels).unsqueeze(-1)
         probs = torch.cat((probs, labels), dim=1)
         return self._cal_roc_eer(probs.cpu())
+
+    @torch.no_grad()
+    def _evaluate_auroc(self, data_loader: DataLoader, labels: np.ndarray) -> float:
+        self.model.eval()
+        scores = []
+        for batch, _ in tqdm(data_loader, desc="Evaluating AUROC"):
+            batch = batch.unsqueeze(1).to(self.device)
+            output = self.model(batch)
+            prob = F.softmax(output, dim=1)
+            scores.extend(prob[:, 1].detach().cpu().numpy().tolist())
+        return float(roc_auc_score(labels, np.array(scores)))
 
     def _cal_roc_eer(self, probs):
         """
