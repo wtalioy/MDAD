@@ -12,7 +12,7 @@ class InTheWild(BaseDataset):
         super().__init__(os.path.join(data_dir or "data", "release_in_the_wild"), *args, **kwargs)
         self.name = "in-the-wild"
 
-    def _load_meta(self):
+    def _load_meta(self, split: str = "test"):
         data = []
         labels = []
         with open(os.path.join(self.data_dir, "meta.csv"), "r", encoding="utf-8") as f:
@@ -26,6 +26,3 @@ class InTheWild(BaseDataset):
 
     def train(self, baseline: Baseline) -> str:
         raise NotImplementedError("Training is not supported for InTheWild")
-
-    def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
-        return baseline.evaluate(data=self.data, labels=self.labels, metrics=metrics, in_domain=False, dataset_name=self.name)

@@ -13,8 +13,8 @@ class ASVspoof2021(BaseDataset):
         super().__init__()
         self.name = f"ASVspoof2021_{subset}"
 
-    def _load_meta(self):
-        hf_dataset = load_dataset(f"MoaazTalab/ASVspoof_2021_{self.subset}_Balanced_Normalized", split="test")
+    def _load_meta(self, split: str = "test"):
+        hf_dataset = load_dataset(f"MoaazTalab/ASVspoof_2021_{self.subset}_Balanced_Normalized", split=split)
         data = []
         labels = []
         for item in tqdm(hf_dataset, desc="Loading dataset"):
@@ -29,6 +29,3 @@ class ASVspoof2021(BaseDataset):
 
     def train(self, baseline: Baseline) -> str:
         raise NotImplementedError("Training is not supported for ASVspoof2021")
-
-    def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
-        return baseline.evaluate(data=self.data, labels=self.labels, metrics=metrics, in_domain=False, dataset_name=self.name)

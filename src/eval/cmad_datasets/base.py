@@ -13,29 +13,26 @@ class BaseDataset:
         self.data_dir = data_dir
         self.splits = ['train', 'dev', 'test']
         self.sr = 16000
-        self.data, self.labels = self._load_meta()
 
-    def _load_meta(self):
-        split_data = {}
-        split_labels = {}
-        for split in self.splits:
-            with open(os.path.join(self.data_dir, f'meta_{split}.json'), 'r', encoding='utf-8') as f:
-                meta = json.load(f)
-            data = []
-            labels = []
-            for item in tqdm(meta, desc=f"Loading {split} split"):
-                if 'real' in item['audio']:
-                    audio, _ = librosa.load(os.path.join(self.data_dir, item['audio']['real']), sr=None)
+    def _load_meta(self, split: Optional[str] = None):
+        if split not in self.splits:
+            raise ValueError(f"Invalid split: {split}")
+        meta_path = os.path.join(self.data_dir, f'meta_{split}.json') if split is not None else os.path.join(self.data_dir, 'meta.json')
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+        data = []
+        labels = []
+        for item in tqdm(meta, desc=f"Loading {split if split is not None else 'all'} split"):
+            if 'real' in item['audio']:
+                audio, _ = librosa.load(os.path.join(self.data_dir, item['audio']['real']), sr=None)
+                data.append(audio)
+                labels.append(Label.real)
+            if 'fake' in item['audio']:
+                for fake_path in item['audio']['fake'].values():
+                    audio, _ = librosa.load(os.path.join(self.data_dir, fake_path), sr=None)
                     data.append(audio)
-                    labels.append(Label.real)
-                if 'fake' in item['audio']:
-                    for fake_path in item['audio']['fake'].values():
-                        audio, _ = librosa.load(os.path.join(self.data_dir, fake_path), sr=None)
-                        data.append(audio)
-                        labels.append(Label.fake)
-            split_data[split] = data
-            split_labels[split] = np.array(labels)
-        return split_data, split_labels
+                    labels.append(Label.fake)
+        return data, np.array(labels)
 
     def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
         """
@@ -50,13 +47,38 @@ class BaseDataset:
             Dictionary containing evaluation results
         """
         if in_domain:
-            return baseline.evaluate(data=self.data['test'], labels=self.labels['test'], metrics=metrics, in_domain=True, dataset_name=self.name)
+            data, labels = self._load_meta(split='test')
+            if baseline.name == 'ARDetect':
+                ref_data, ref_labels = self._load_meta(split='train')
+                return baseline.evaluate(
+                    data=data,
+                    labels=labels,
+                    ref_data=ref_data,
+                    ref_labels=ref_labels,
+                    metrics=metrics,
+                    sr=self.sr,
+                    in_domain=True,
+                    dataset_name=self.name
+                )
+            return baseline.evaluate(
+                data=data,
+                labels=labels,
+                metrics=metrics,
+                sr=self.sr,
+                in_domain=True,
+                dataset_name=self.name
+            )
         else:
-            data = self.data['train'] + self.data['dev'] + self.data['test']
-            labels = np.concatenate([self.labels['train'], self.labels['dev'], self.labels['test']])
-            return baseline.evaluate(data=data, labels=labels, metrics=metrics, sr=self.sr, in_domain=False)
+            data, labels = self._load_meta()
+            return baseline.evaluate(
+                data=data,
+                labels=labels,
+                metrics=metrics,
+                sr=self.sr,
+                in_domain=False
+            )
 
-    def train(self, baseline: Baseline) -> str:
+    def train(self, baseline: Baseline):
         """
         Train the baseline model on the dataset.
 
@@ -66,5 +88,12 @@ class BaseDataset:
         Returns:
             Path to the checkpoint file
         """
-        ckpt_path = baseline.train(train_data=self.data['train'], train_labels=self.labels['train'], eval_data=self.data['dev'], eval_labels=self.labels['dev'], dataset_name=self.name)
-        return ckpt_path
+        train_data, train_labels = self._load_meta(split='train')
+        eval_data, eval_labels = self._load_meta(split='dev')
+        baseline.train(
+            train_data=train_data,
+            train_labels=train_labels,
+            eval_data=eval_data,
+            eval_labels=eval_labels,
+            dataset_name=self.name
+        )
