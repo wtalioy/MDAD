@@ -1,6 +1,7 @@
 # CMAD: Comprehensive Multi-domain Audio Deepfake Benchmark
+[![Hugging Face%20-%20CMAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20CMAD-blue)](https://huggingface.co/datasets/Lioy/CMAD)
 
-CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benchmark for evaluating audio deepfake detection methods across diverse domains and scenarios. This repository provides evaluation tools, baseline models, and comprehensive datasets for advancing research in audio deepfake detection.
+CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio across diverse domains. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
 
 ## 🔥 Features
 
@@ -8,7 +9,188 @@ CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benc
 - **Comprehensive Evaluation**: Support for both cross-domain and in-domain evaluation scenarios
 - **State-of-the-art Baselines**: 6 advanced audio deepfake detection models
 - **Rich Audio Content**: Over 422 hours of audio data with balanced real and fake samples
-- **Flexible Framework**: Easy-to-use evaluation pipeline with modular design
+- **Integrated Generation**: TTS + VC toolkit to synthesize domain-specific deepfake audio with automatic metadata updates
+- **Flexible Framework**: Easy-to-use, modular pipelines for both evaluation and generation
+
+## 📚 Table of Contents
+
+- **Installation**: [Installation](#installation)
+- **Quick Start**: [Quick Start](#quick-start)
+- **Evaluation Guide**: [Evaluation Guide](#evaluation-guide)
+- **Generation Guide**: [Generation Guide](#generation-guide)
+- **Datasets**: [Dataset Overview](#dataset-overview)
+- **Baselines**: [Available Baselines](#available-baselines)
+- **Metrics**: [Evaluation Metrics](#evaluation-metrics)
+- **Advanced Usage**: [Advanced Usage](#advanced-usage)
+- **Repository Structure**: [Repository Structure](#repository-structure)
+- **Logging and Results**: [Logging and Results](#logging-and-results)
+- **Citation**: [Citation](#citation)
+- **License**: [License](#license)
+
+## 🏗️ Installation
+
+### Prerequisites
+- Python 3.12+
+- CUDA-compatible GPU (recommended)
+- 75GB+ free disk space for full dataset
+
+### Setup
+
+1. **Clone the repository**:
+```bash
+git clone https://github.com/wtalioy/CMAD.git
+cd CMAD
+```
+
+2. **Install dependencies**:
+```bash
+pip install -r requirements.txt
+```
+
+3. **Download datasets**: 
+Place CMAD dataset files in the `data/` directory following this structure:
+```
+data/
+├── Audiobook/
+├── Emotional/
+├── Interview/
+├── Movie/
+├── News/
+├── NoisySpeech/
+├── PartialFake/
+├── PhoneCall/
+├── Podcast/
+├── PublicFigure/
+└── PublicSpeech/
+```
+
+## 🚀 Quick Start
+
+Run a quick evaluation or generation with the most common options.
+
+### Evaluation
+```bash
+# Cross-domain evaluation on two datasets
+python src/eval/main.py --baseline aasist --dataset interview publicspeech --mode cross --metric eer
+
+# In-domain train+eval
+python src/eval/main.py --baseline aasist --dataset interview --mode in --metric eer
+```
+
+### Generation
+```bash
+# Generate English podcast samples using reference-speaker TTS
+python src/generation/main.py -d podcast -t xttsv2 yourtts -s en
+```
+
+## 🧪 Evaluation Guide
+
+Evaluate baseline models across domains with unified CLI.
+
+### CLI
+```bash
+python src/eval/main.py \
+  -b aasist rawnet2 \
+  -d phonecall publicspeech interview \
+  -m cross \
+  --metric eer
+```
+
+### Arguments
+- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `ardetect`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
+- **-d / --dataset**: one or more of: `publicfigure`, `news`, `podcast`, `partialfake`, `audiobook`, `noisyspeech`, `phonecall`, `interview`, `publicspeech`, `movie`, `emotional`, `asvspoof2021`, `in-the-wild`
+- **-m / --mode**: `cross` or `in`
+- **-s / --subset**: dataset-specific subset (if applicable)
+- **--metric**: one or more metrics, e.g. `eer`, `auroc`
+- **--train_only / --eval_only**: restrict to one stage in `in` mode
+- **--data_dir**: path to data root (default: `data`)
+
+### Modes
+- **Cross-domain**: evaluate without training
+  ```bash
+  python src/eval/main.py -b aasist rawnet2 -d phonecall publicspeech interview -m cross --metric eer
+  ```
+- **In-domain**: optional training followed by evaluation
+  ```bash
+  # Train only
+  python src/eval/main.py -b aasist -d interview -m in --train_only
+  # Eval only (using existing checkpoints)
+  python src/eval/main.py -b aasist -d interview -m in --eval_only --metric eer
+  # Train + Eval
+  python src/eval/main.py -b aasist -d interview -m in --metric eer
+  ```
+
+### Outputs
+- Metrics printed to console
+- Logs written to `logs/eval.log`
+
+## 🔊 Generation Guide
+
+Generate synthetic audio for raw domains using TTS and optional Voice Conversion (VC) models.
+
+### CLI
+```bash
+python src/generation/main.py \
+  -d podcast \
+  -t xttsv2 yourtts \
+  -v openvoice \
+  -s en
+```
+
+### Arguments
+- **-d / --dataset**: one or more of: `news`, `podcast`, `movie`, `phonecall`, `interview`, `publicspeech`, `partialfake`, `noisyspeech`
+- **-t / --tts_model**: one or more of: `vits`, `xttsv2`, `yourtts`, `tacotron2`, `bark`, `melotts`, `elevenlabs`, `geminitts`, `gpt4omini`
+- **-v / --vc_model**: optional VC models: `knnvc`, `freevc`, `openvoice`
+- **-s / --subset**: language/subset for certain datasets (e.g., `phonecall`). Common values: `en`, `zh-cn` (default: `zh-cn`)
+- **--data_dir**: custom data root for the selected dataset(s). If omitted, defaults to `data/{Dataset}`
+
+Notes:
+- Some TTS models require VC (their voices are not speaker-conditioned). These are marked internally and will be paired with provided VC models if any.
+- TTS models that support reference audio (e.g., `xttsv2`, `yourtts`) can run without VC.
+
+### Dataset expectations
+- Each dataset directory should contain a `meta.json` describing items and real audio paths, e.g. `data/Podcast/meta.json` with `audio/real/...` entries.
+- Generated audio is saved under `audio/fake/...` and `meta.json` is updated with a mapping per model.
+- `phonecall` expects a subfolder by subset: `data/PhoneCall/en` or `data/PhoneCall/zh-cn`.
+- `partialfake` will build its own `meta.json` by sampling from `Interview`, `Podcast`, and `PublicSpeech` test metadata. Ensure these exist at `data/{Domain}/meta_test.json`.
+
+### Environment variables for cloud TTS
+Set the following if you use those providers:
+- **OPENAI_API_KEY**: required for `gpt4omini`
+- **GOOGLE_API_KEY**: required for `geminitts`
+- **ELEVENLABS_API_KEY**: required for `elevenlabs`
+
+Examples:
+```bash
+# Bash
+export OPENAI_API_KEY=... \
+       GOOGLE_API_KEY=... \
+       ELEVENLABS_API_KEY=...
+
+# PowerShell
+$env:OPENAI_API_KEY="..."; $env:GOOGLE_API_KEY="..."; $env:ELEVENLABS_API_KEY="..."
+```
+
+### Examples
+- **TTS-only English podcast generation** (reference-speaker TTS):
+```bash
+python src/generation/main.py -d podcast -t xttsv2 yourtts -s en
+```
+
+- **Chinese news with TTS+VC** (pairs TTS that require VC with a VC model):
+```bash
+python src/generation/main.py -d news -t gpt4omini melotts bark -v openvoice -s zh-cn
+```
+
+- **PartialFake composition across domains**:
+```bash
+python src/generation/main.py -d partialfake -t xttsv2 -v openvoice
+```
+
+### Outputs and logs
+- Generated files: `data/{Dataset}/audio/fake/...`
+- Updated metadata: `data/{Dataset}/meta.json`
+- Logs: `logs/generation*.log`
 
 ## 📊 Dataset Overview
 
@@ -30,121 +212,26 @@ CMAD includes 13 diverse datasets across multiple domains:
 
 **Total**: 180h 49m real + 241h 51m fake = **422h 41m** (103,395 real + 120,980 fake files)
 
-## 🏗️ Installation
-
-### Prerequisites
-- Python 3.8+
-- CUDA-compatible GPU (recommended)
-- 64GB+ free disk space for full dataset
-
-### Setup
-
-1. **Clone the repository**:
-```bash
-git clone https://github.com/wtalioy/CMAD.git
-cd CMAD
-```
-
-2. **Install dependencies**:
-```bash
-pip install -r requirements.txt
-```
-
-3. **Download datasets**: 
-Place your dataset files in the `data/` directory following this structure:
-```
-data/
-├── Audiobook/
-├── Emotional/
-├── Interview/
-├── Movie/
-├── News/
-├── NoisySpeech/
-├── PartialFake/
-├── PhoneCall/
-├── Podcast/
-├── PublicFigure/
-└── PublicSpeech/
-```
-
-## 🚀 Quick Start
-
-### Basic Evaluation
-
-Evaluate a baseline model on multiple datasets:
-
-```bash
-cd src/eval
-python main.py --baseline aasist --dataset interview publicspeech --mode cross --metric eer
-```
-
-### Cross-domain Evaluation
-
-Evaluate multiple baselines across domains (no training required):
-
-```bash
-python main.py \
-    --baseline aasist rawnet2 res-tssdnet \
-    --dataset phonecall publicspeech interview \
-    --mode cross \
-    --metric eer
-```
-
-### In-domain Evaluation
-
-Train and evaluate on the same domain:
-
-```bash
-python main.py \
-    --baseline aasist \
-    --dataset interview \
-    --mode in \
-    --metric eer
-```
-
-### Training Only
-
-Train a model without evaluation:
-
-```bash
-python main.py \
-    --baseline aasist \
-    --dataset interview \
-    --mode in \
-    --train_only
-```
-
-### Evaluation Only
-
-Evaluate a pre-trained model:
-
-```bash
-python main.py \
-    --baseline aasist \
-    --dataset interview \
-    --mode in \
-    --eval_only
-```
-
 ## 🎯 Available Baselines
 
 CMAD includes 6 state-of-the-art audio deepfake detection models:
 
 | Baseline | Description | Paper |
 |----------|-------------|-------|
-| **AASIST** | Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks | [ICASSP 2021](https://arxiv.org/abs/2110.01200) |
-| **AASIST-L** | Large variant of AASIST | [ICASSP 2021](https://arxiv.org/abs/2110.01200) |
-| **RawNet2** | End-to-end anti-spoofing using raw waveforms | [Interspeech 2020](https://arxiv.org/abs/2011.01108) |
-| **Res-TSSDNet** | Residual Time-frequency Squeeze-and-Scale Network | [ICASSP 2023](https://arxiv.org/abs/2210.06694) |
-| **Inc-TSSDNet** | Inception Time-frequency Squeeze-and-Scale Network | [ICASSP 2023](https://arxiv.org/abs/2210.06694) |
-| **RawGAT-ST** | Graph Attention Networks with Spectro-Temporal features | [ICASSP 2022](https://arxiv.org/abs/2203.06028) |
-| **ARDetect** | Maximum Mean Discrepancy based detection | [ICLR 2024](https://arxiv.org/abs/2309.15603) |
+| **AASIST** | Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks | [ICASSP 2022](https://arxiv.org/abs/2110.01200) |
+| **AASIST-L** | Lightweight variant of AASIST | [ICASSP 2022](https://arxiv.org/abs/2110.01200) |
+| **RawNet2** | End-to-end anti-spoofing using raw waveforms | [ICASSP 2021](https://arxiv.org/abs/2011.01108) |
+| **Res-TSSDNet** | Time-domain synthetic speech detection net (Resnet Net Style) | [IEEE 2021](https://arxiv.org/abs/2106.06341) |
+| **Inc-TSSDNet** | Time-domain synthetic speech detection net (Inception Net Style) | [IEEE 2021](https://arxiv.org/abs/2106.06341) |
+| **RawGAT-ST** | End-to-End Spectro-Temporal Graph Attention Networks for Speaker Verification Anti-Spoofing and Speech Deepfake Detection | [ASVspoof 2021 Workshop](https://arxiv.org/abs/2107.12710) |
+| **ARDetect** | Maximum Mean Discrepancy based detection | [Published soon]() |
 
 ## 📈 Evaluation Metrics
 
 CMAD supports the following evaluation metrics:
 
 - **EER** (Equal Error Rate): Primary metric for audio deepfake detection
+- **AUROC** (Area Under the Receiver Operating Characteristic Curve): Secondary metric for audio deepfake detection
 
 ## 🔧 Advanced Usage
 
@@ -259,12 +346,6 @@ If you use CMAD in your research, please cite:
   year={2024}
 }
 ```
-
-## 🔗 Links
-
-- **Dataset on Hugging Face**: [Lioy/CMAD](https://huggingface.co/datasets/Lioy/CMAD)
-- **Paper**: [Coming Soon]
-- **Demo**: [Coming Soon]
 
 ---
 
