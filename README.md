@@ -1,11 +1,11 @@
-# CMAD: Comprehensive Multi-domain Audio Deepfake Benchmark
-[![Hugging Face%20-%20CMAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20CMAD-blue)](https://huggingface.co/datasets/Lioy/CMAD)
+# MTAD: Large-scale Multi-Topic Audio Deepfake Benchmark
+[![Hugging Face%20-%20MTAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20MTAD-blue)](https://huggingface.co/datasets/Lioy/MTAD)
 
-CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio across diverse domains. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
+MTAD is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio across diverse topics. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
 
 ## 🔥 Features
 
-- **Multi-domain Coverage**: 13 diverse datasets spanning different audio domains (news, interviews, movies, audiobooks, etc.)
+- **Multi-topic Coverage**: 13 diverse datasets spanning different audio topics (news, interviews, movies, audiobooks, etc.)
 - **Comprehensive Evaluation**: Support for both cross-domain and in-domain evaluation scenarios
 - **State-of-the-art Baselines**: 6 advanced audio deepfake detection models
 - **Rich Audio Content**: Over 422 hours of audio data with balanced real and fake samples
@@ -38,17 +38,19 @@ CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benc
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/wtalioy/CMAD.git
-cd CMAD
+git clone https://github.com/wtalioy/MTAD.git
+cd MTAD
 ```
 
 2. **Install dependencies**:
 ```bash
+conda create -n mtad python=3.12 -y
+conda activate mtad
 pip install -r requirements.txt
 ```
 
 3. **Download datasets**: 
-Place CMAD dataset files in the `data/` directory following this structure:
+Place MTAD dataset files in the `data/` directory following this structure:
 ```
 data/
 ├── Audiobook/
@@ -194,7 +196,7 @@ python src/generation/main.py -d partialfake -t xttsv2 -v openvoice
 
 ## 📊 Dataset Overview
 
-CMAD includes 13 diverse datasets across multiple domains:
+MTAD includes 13 diverse datasets across multiple domains:
 
 | Dataset | Domain | Real Duration | Fake Duration | Total Duration | Real Files | Fake Files |
 |---------|--------|---------------|---------------|----------------|------------|------------|
@@ -214,7 +216,7 @@ CMAD includes 13 diverse datasets across multiple domains:
 
 ## 🎯 Available Baselines
 
-CMAD includes 6 state-of-the-art audio deepfake detection models:
+MTAD includes 6 state-of-the-art audio deepfake detection models:
 
 | Baseline | Description | Paper |
 |----------|-------------|-------|
@@ -228,7 +230,7 @@ CMAD includes 6 state-of-the-art audio deepfake detection models:
 
 ## 📈 Evaluation Metrics
 
-CMAD supports the following evaluation metrics:
+MTAD supports the following evaluation metrics:
 
 - **EER** (Equal Error Rate): Primary metric for audio deepfake detection
 - **AUROC** (Area Under the Receiver Operating Characteristic Curve): Secondary metric for audio deepfake detection
@@ -276,7 +278,7 @@ Model configurations are stored in `src/eval/baselines/{model}/config/`:
 ## 📁 Repository Structure
 
 ```
-CMAD/
+MTAD/
 ├── data/                          # Dataset directory
 ├── src/
 │   ├── eval/
@@ -336,11 +338,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📝 Citation
 
-If you use CMAD in your research, please cite:
+If you use MTAD in your research, please cite:
 
 ```bibtex
-@inproceedings{cmad2024,
-  title={CMAD: Comprehensive Multi-domain Audio Deepfake Benchmark},
+@inproceedings{mtad2024,
+  title={MTAD: Large-scale Multi-topic Audio Deepfake Benchmark},
   author={Your Name and Collaborators},
   booktitle={Conference Name},
   year={2024}
