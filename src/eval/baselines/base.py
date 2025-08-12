@@ -57,7 +57,15 @@ class Baseline:
         dataset = CustomDataset(data, labels)
         if len(data) < batch_size:
             drop_last = False
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            num_workers=num_workers,
+            pin_memory=True if self.device == "cuda" else False,
+            persistent_workers=True if num_workers > 0 else False,
+        )
         return loader
 
     def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int = 16000, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:

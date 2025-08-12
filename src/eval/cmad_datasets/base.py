@@ -1,9 +1,12 @@
 import os
+import json
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Optional, Tuple, Dict
+
 import librosa
 import numpy as np
-from typing import List, Optional
 from tqdm import tqdm
-import json
+
 from baselines import Baseline
 from config import Label
 
@@ -13,26 +16,49 @@ class BaseDataset:
         self.data_dir = data_dir
         self.splits = ['train', 'dev', 'test']
         self.sr = 16000
+        self.data, self.labels = self._load_meta()
 
-    def _load_meta(self, split: Optional[str] = None):
-        if split not in self.splits:
-            raise ValueError(f"Invalid split: {split}")
-        meta_path = os.path.join(self.data_dir, f'meta_{split}.json') if split is not None else os.path.join(self.data_dir, 'meta.json')
-        with open(meta_path, 'r', encoding='utf-8') as f:
-            meta = json.load(f)
-        data = []
-        labels = []
-        for item in tqdm(meta, desc=f"Loading {split if split is not None else 'all'} split"):
-            if 'real' in item['audio']:
-                audio, _ = librosa.load(os.path.join(self.data_dir, item['audio']['real']), sr=None)
-                data.append(audio)
-                labels.append(Label.real)
-            if 'fake' in item['audio']:
-                for fake_path in item['audio']['fake'].values():
-                    audio, _ = librosa.load(os.path.join(self.data_dir, fake_path), sr=None)
-                    data.append(audio)
-                    labels.append(Label.fake)
-        return data, np.array(labels)
+    def _load_meta(self) -> Tuple[Dict[str, List[np.ndarray]], Dict[str, List[Label]]]:
+        split_data = {}
+        split_labels = {}
+
+        max_workers = min(32, (os.cpu_count() or 8))
+
+        def _load_audio(path_and_label: Tuple[str, Label]) -> Tuple[np.ndarray, Label]:
+            rel_path, label = path_and_label
+            abs_path = os.path.join(self.data_dir, rel_path)
+            audio, _ = librosa.load(abs_path, sr=self.sr)
+            return audio, label
+
+        for split in self.splits:
+            split_data[split] = []
+            split_labels[split] = []
+
+            meta_path = os.path.join(self.data_dir, f"meta_{split}.json")
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+
+            tasks = []
+            for item in tqdm(meta, desc=f"Scanning {split} metadata"):
+                if "real" in item["audio"]:
+                    tasks.append((item["audio"]["real"], Label.real))
+                if "fake" in item["audio"]:
+                    for fake_path in item["audio"]["fake"].values():
+                        tasks.append((fake_path, Label.fake))
+
+            if len(tasks) == 0:
+                continue
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for audio, label in tqdm(
+                    executor.map(_load_audio, tasks),
+                    total=len(tasks),
+                    desc=f"Loading {split} audio",
+                ):
+                    split_data[split].append(audio)
+                    split_labels[split].append(label)
+
+        return split_data, split_labels
 
     def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
         """
@@ -47,9 +73,11 @@ class BaseDataset:
             Dictionary containing evaluation results
         """
         if in_domain:
-            data, labels = self._load_meta(split='test')
+            data = self.data['test']
+            labels = self.labels['test']
             if baseline.name == 'ARDetect':
-                ref_data, ref_labels = self._load_meta(split='train')
+                ref_data = self.data['train']
+                ref_labels = self.labels['train']
                 return baseline.evaluate(
                     data=data,
                     labels=labels,
@@ -69,7 +97,8 @@ class BaseDataset:
                 dataset_name=self.name
             )
         else:
-            data, labels = self._load_meta()
+            data = np.concatenate([self.data[split] for split in self.splits])
+            labels = np.concatenate([self.labels[split] for split in self.splits])
             return baseline.evaluate(
                 data=data,
                 labels=labels,
@@ -88,8 +117,10 @@ class BaseDataset:
         Returns:
             Path to the checkpoint file
         """
-        train_data, train_labels = self._load_meta(split='train')
-        eval_data, eval_labels = self._load_meta(split='dev')
+        train_data = self.data['train']
+        train_labels = self.labels['train']
+        eval_data = self.data['dev']
+        eval_labels = self.labels['dev']
         baseline.train(
             train_data=train_data,
             train_labels=train_labels,

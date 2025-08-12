@@ -20,6 +20,7 @@ def display_results(results: dict, baseline: str, dataset: str):
 def main(args):
     warnings.filterwarnings("ignore")
     
+    torch.backends.cudnn.benchmark = True
     torch.multiprocessing.set_sharing_strategy('file_system')
     os.makedirs("logs", exist_ok=True)
     log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
