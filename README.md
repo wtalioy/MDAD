@@ -31,7 +31,7 @@ CMAD (Comprehensive Multi-domain Audio Deepfake benchmark) is a large-scale benc
 
 ### Prerequisites
 - Python 3.12+
-- CUDA-compatible GPU (recommended)
+- CUDA 12.4+
 - 75GB+ free disk space for full dataset
 
 ### Setup
