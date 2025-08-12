@@ -42,7 +42,7 @@ coqui-tts==0.27.0
 coqui-tts-trainer==0.3.1
 csvw==3.5.1
 cuda-bindings==12.9.0
-cuda-python==12.3.0
+cuda-python==12.4.0
 cycler==0.12.1
 Cython==3.1.2
 cytoolz==1.0.1
@@ -72,7 +72,7 @@ fonttools==4.58.5
 fqdn==1.5.1
 frozenlist==1.7.0
 fsspec==2024.12.0
-fugashi==1.3.0
+fugashi==1.5.0
 future==1.0.0
 g2p-en==2.1.0
 g2pkk==0.1.2
@@ -94,12 +94,12 @@ graphviz==0.21
 greenlet==3.2.3
 groovy==0.1.2
 grpcio==1.73.1
-gruut==2.2.3
-gruut-ipa==0.13.0
-gruut_lang_de==2.0.1
-gruut_lang_en==2.0.1
-gruut_lang_es==2.0.1
-gruut_lang_fr==2.0.2
+gruut
+gruut-ipa
+gruut_lang_de
+gruut_lang_en
+gruut_lang_es
+gruut_lang_fr
 h11==0.16.0
 hf-xet==1.1.5
 httpcore==1.0.9
@@ -169,7 +169,6 @@ matplotlib-inline==0.1.7
 mdurl==0.1.2
 mecab-python3==1.0.9
 mediapy==1.1.6
--e git+https://github.com/myshell-ai/MeloTTS.git@209145371cff8fc3bd60d7be902ea69cbdb7965a#egg=melotts
 mistral_common==1.8.1
 mistune==3.1.3
 monotonic-alignment-search==0.2.0
@@ -188,7 +187,7 @@ nltk==3.9.1
 nnAudio==0.3.3
 notebook==7.4.4
 notebook_shim==0.2.4
-num2words==0.5.12
+num2words
 numba==0.61.2
 numpy==1.26.4
 nvidia-cublas-cu12==12.6.4.1
@@ -302,8 +301,8 @@ starlette==0.47.1
 sympy==1.14.0
 tabulate==0.9.0
 tenacity==8.5.0
-tensorboard==2.16.2
-tensorboard-data-server==0.7.2
+tensorboard
+tensorboard-data-server
 termcolor==3.1.0
 terminado==0.18.1
 text-unidecode==1.3
