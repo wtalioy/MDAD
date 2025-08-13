@@ -13,7 +13,7 @@ class InTheWild(BaseDataset):
         super().__init__(os.path.join(data_dir or "data", "release_in_the_wild"), *args, **kwargs)
         self.name = "in-the-wild"
 
-    def _load_meta(self, split: str = "test"):
+    def _load_meta(self):
         data = []
         labels = []
         with open(os.path.join(self.data_dir, "meta.csv"), "r", encoding="utf-8") as f:

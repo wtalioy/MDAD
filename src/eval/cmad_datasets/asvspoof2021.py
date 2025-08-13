@@ -14,8 +14,8 @@ class ASVspoof2021(BaseDataset):
         super().__init__()
         self.name = f"ASVspoof2021_{subset}"
 
-    def _load_meta(self, split: str = "test"):
-        hf_dataset = load_dataset(f"MoaazTalab/ASVspoof_2021_{self.subset}_Balanced_Normalized", split=split)
+    def _load_meta(self):
+        hf_dataset = load_dataset(f"MoaazTalab/ASVspoof_2021_{self.subset}_Balanced_Normalized", split="test")
         data = []
         labels = []
 
