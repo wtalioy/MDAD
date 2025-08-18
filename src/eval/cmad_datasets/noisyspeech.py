@@ -26,7 +26,7 @@ class NoisySpeech(BaseDataset):
             tasks = []
             for item in items:
                 if 'real' in item['audio']:
-                    tasks.append((os.path.join("data", source_name, item['audio']['real']), Label.real))
+                    tasks.append((os.path.join(os.path.dirname(self.data_dir), source_name, item['audio']['real']), Label.real))
                 if 'fake' in item['audio']:
                     tasks.append((os.path.join(self.data_dir, item['audio']['fake']), Label.fake))
 
