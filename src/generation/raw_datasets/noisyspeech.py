@@ -21,7 +21,10 @@ class NoisySpeech(BaseRawDataset):
     def _load_noise_audios(self):
         noise_audios = {}
         for noise_type in self.noise_files:
-            noise_audios[noise_type] = AudioSegment.from_file(self.noise_files[noise_type])
+            audio = AudioSegment.from_file(self.noise_files[noise_type])
+            # Ensure sample rate is 16000 Hz
+            audio = audio.set_frame_rate(16000)
+            noise_audios[noise_type] = audio
         return noise_audios
 
     def _add_noise(self, audio: AudioSegment, noise: AudioSegment, noise_level_db=-12) -> AudioSegment:
@@ -57,6 +60,8 @@ class NoisySpeech(BaseRawDataset):
                     raise ValueError(f"No fake audio found for {item}")
                 audio_path = list(item["audio"]["fake"].values())[0]
                 audio = AudioSegment.from_file(os.path.join(data_dir, audio_path))
+                # Ensure sample rate is 16000 Hz
+                audio = audio.set_frame_rate(16000)
                 noise_type = list(self.noise_audios.keys())[i % len(self.noise_audios)]
                 noisy_audio = self._add_noise(audio, self.noise_audios[noise_type])
                 output_path = os.path.join("audio", f"{source_name.lower()}/{i}.wav")
