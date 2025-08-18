@@ -16,8 +16,15 @@ class NoisySpeech(BaseRawDataset):
             "typing": "src/generation/noise/typing.wav"
         }
         self.ratio = 0.4
+        self.noise_audios = self._load_noise_audios()
 
-    def add_noise(self, audio: AudioSegment, noise: AudioSegment, noise_level_db=-12) -> AudioSegment:
+    def _load_noise_audios(self):
+        noise_audios = {}
+        for noise_type in self.noise_files:
+            noise_audios[noise_type] = AudioSegment.from_file(self.noise_files[noise_type])
+        return noise_audios
+
+    def _add_noise(self, audio: AudioSegment, noise: AudioSegment, noise_level_db=-12) -> AudioSegment:
         quiet_noise = noise.apply_gain(noise_level_db)
         if len(quiet_noise) >= len(audio):
             overlay_start = random.randint(0, len(quiet_noise) - len(audio))
@@ -50,8 +57,8 @@ class NoisySpeech(BaseRawDataset):
                     raise ValueError(f"No fake audio found for {item}")
                 audio_path = list(item["audio"]["fake"].values())[0]
                 audio = AudioSegment.from_file(os.path.join(data_dir, audio_path))
-                noise_type = list(self.noise_files.keys())[i % len(self.noise_files)]
-                noisy_audio = self.add_noise(audio, self.noise_files[noise_type])
+                noise_type = list(self.noise_audios.keys())[i % len(self.noise_audios)]
+                noisy_audio = self._add_noise(audio, self.noise_audios[noise_type])
                 output_path = os.path.join("audio", f"{source_name.lower()}/{i}.wav")
                 noisy_audio.export(os.path.join(self.data_dir, output_path), format="wav")
                 item["audio"]["fake"] = output_path
