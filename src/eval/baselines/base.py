@@ -65,11 +65,11 @@ class Baseline:
             num_workers=num_workers,
             pin_memory=True if self.device == "cuda" else False,
             persistent_workers=True if num_workers > 0 else False,
-        )
+            )
         return loader
 
     def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], sr: int = 16000, in_domain: bool = False, dataset_name: Optional[str] = None) -> dict:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
-    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str, sr: int = 16000):
         raise NotImplementedError("This method should be overridden by subclasses.")

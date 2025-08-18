@@ -2,6 +2,7 @@ import os
 import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Tuple, Dict
+from functools import reduce
 
 import librosa
 import numpy as np
@@ -97,7 +98,7 @@ class BaseDataset:
                 dataset_name=self.name
             )
         else:
-            data = np.concatenate([self.data[split] for split in self.splits])
+            data = reduce(lambda x, y: x + y, list(self.data.values()))
             labels = np.concatenate([self.labels[split] for split in self.splits])
             return baseline.evaluate(
                 data=data,
@@ -126,5 +127,6 @@ class BaseDataset:
             train_labels=train_labels,
             eval_data=eval_data,
             eval_labels=eval_labels,
-            dataset_name=self.name
+            dataset_name=self.name,
+            sr=self.sr
         )

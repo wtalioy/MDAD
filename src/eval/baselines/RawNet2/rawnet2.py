@@ -97,7 +97,7 @@ class RawNet2(Baseline):
                 pbar.update(1)
         return float(roc_auc_score(labels, np.array(scores)))
 
-    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str, **kwargs):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=args['bs'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, batch_size=128)
@@ -124,7 +124,7 @@ class RawNet2(Baseline):
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
 
-    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: List[Label], metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:
