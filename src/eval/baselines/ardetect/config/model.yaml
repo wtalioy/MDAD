@@ -5,8 +5,11 @@ mmdo_flag: false
 transformer_flag: true
 num_hidden_layers: 1
 num_mlp: 0
+in_dim: 1920
+token_num: 31
 hid_dim: 1024
 out_dim: 300
 epsilon: 10
 sigma: 30.0
 sigma0: 45.0
+dropout: 0.2

@@ -181,6 +181,9 @@ class MMDModel:
         self.sigma = torch.tensor(config.get("sigma", 30.0) ** 2).to(device, dtype=torch.float)
         self.sigma0_u = torch.tensor(config.get("sigma0_u", 45.0) ** 2).to(device, dtype=torch.float)
         self.ep = torch.tensor(config.get("ep", 10.0) ** 2).to(device, dtype=torch.float)
+        self.coeff_xy = config.get("coeff_xy", 2)
+        self.is_yy_zero = config.get("is_yy_zero", False)
+        self.is_xx_zero = config.get("is_xx_zero", False)
 
         self.basemodel = MMDBaseModel(config=config).to(device)
 

@@ -129,8 +129,7 @@ def MMD_3_Sample_Test(
     fea_z_org,
     sigma,
     sigma0,
-    epsilon,
-    alpha,
+    epsilon
 ):
     """Run three-sample test (TST) using deep kernel kernel."""
     X = ref_fea.clone().detach()
@@ -159,14 +158,8 @@ def MMD_3_Sample_Test(
     if Diff_Var.item() <= 0:
         Diff_Var = torch.max(torch.tensor(epsilon), torch.tensor(1e-08))
     p_value = torch.distributions.Normal(0, 1).cdf(-t / torch.sqrt((Diff_Var)))
-    t = t / torch.sqrt(Diff_Var)
 
-    if p_value > alpha:
-        h = 0
-    else:
-        h = 1
-
-    return h, p_value.item(), t.item()
+    return p_value.item()
 
 
 def h1_mean_var_gram(
@@ -228,8 +221,8 @@ def h1_mean_var_gram(
 
 def MMDu(
     Fea,
-    len_s,
     Fea_org,
+    len_s,
     sigma,
     sigma0=0.1,
     epsilon=10 ** (-10),
