@@ -13,6 +13,7 @@ class PartialFake(BaseDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "PartialFake"), *args, **kwargs)
         self.name = "PartialFake"
+        self.sr = 16000
 
     def _load_meta(self):
         with open(os.path.join(self.data_dir, f'meta.json'), 'r', encoding='utf-8') as f:
@@ -72,6 +73,6 @@ class PartialFake(BaseDataset):
         results = {}
         for source_name, source_data in self.data.items():
             source_labels = self.labels[source_name]
-            source_results = baseline.evaluate(data=source_data, labels=source_labels, metrics=metrics, in_domain=in_domain, dataset_name=self.name)
+            source_results = baseline.evaluate(data=source_data, labels=source_labels, metrics=metrics, sr=self.sr, in_domain=in_domain, dataset_name=self.name)
             results[source_name] = source_results
         return results
