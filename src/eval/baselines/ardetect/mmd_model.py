@@ -185,6 +185,7 @@ class MMDModel:
         self.is_yy_zero = config.get("is_yy_zero", False)
         self.is_xx_zero = config.get("is_xx_zero", False)
 
+        self.device = device
         self.basemodel = MMDBaseModel(config=config).to(device)
 
     def load_state_dict(self, ckpt_path: str):

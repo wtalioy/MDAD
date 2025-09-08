@@ -225,7 +225,7 @@ class ARDetect(Baseline):
             self.net.load_state_dict(default_ckpt)
             ref_data, ref_labels = self._load_default(split="train", limit=512)
 
-        ref_fea = self._load_features(ref_data, cache_name=f"train_{dataset_name}")
+        ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real = np.array(ref_fea)[ref_labels == Label.real]
         ref_fake = np.array(ref_fea)[ref_labels == Label.fake]
         ref_real = torch.from_numpy(ref_real).squeeze(1).to(self.device)
