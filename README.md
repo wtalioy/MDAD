@@ -47,6 +47,10 @@ cd MTAD
 conda create -n mtad python=3.12 -y
 conda activate mtad
 pip install -r requirements.txt
+python -m unidic download
+cd src/generation/models/tts/vits/monotonic_align
+python setup.py build_ext --inplace
+cd ../../../../../..
 ```
 
 3. **Download datasets**: 
