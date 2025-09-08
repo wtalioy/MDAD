@@ -198,26 +198,6 @@ python src/generation/main.py -d partialfake -t xttsv2 -v openvoice
 - Updated metadata: `data/{Dataset}/meta.json`
 - Logs: `logs/generation*.log`
 
-## 📊 Dataset Overview
-
-MTAD includes 13 diverse datasets across multiple domains:
-
-| Dataset | Domain | Real Duration | Fake Duration | Total Duration | Real Files | Fake Files |
-|---------|--------|---------------|---------------|----------------|------------|------------|
-| **Audiobook** | Audiobooks | 19h 24m | 27h 48m | 47h 13m | 9,425 | 13,612 |
-| **Emotional** | Emotional Speech | 29h 4m | 29h 51m | 58h 55m | 35,000 | 36,000 |
-| **Interview** | Interviews | 27h 20m | 31h 52m | 59h 13m | 12,095 | 12,096 |
-| **Movie** | Movie Dialogues | 8h 6m | 11h 51m | 19h 57m | 9,167 | 9,115 |
-| **News** | News Reports | 20h 42m | 19h 9m | 39h 52m | 4,910 | 4,910 |
-| **NoisySpeech** | Noisy Environments | 0h | 18h 0m | 18h 0m | 0 | 7,505 |
-| **PartialFake** | Partial Synthesis | 0h | 22h 57m | 22h 57m | 0 | 7,281 |
-| **PhoneCall** | Phone Conversations | 12h 3m | 14h 47m | 26h 51m | 8,268 | 8,237 |
-| **Podcast** | Podcasts | 22h 42m | 24h 16m | 46h 58m | 4,948 | 4,942 |
-| **PublicFigure** | Public Figures | 15h 17m | 14h 45m | 30h 2m | 9,931 | 7,631 |
-| **PublicSpeech** | Public Speeches | 26h 10m | 26h 35m | 52h 45m | 9,651 | 9,651 |
-
-**Total**: 180h 49m real + 241h 51m fake = **422h 41m** (103,395 real + 120,980 fake files)
-
 ## 🎯 Available Baselines
 
 MTAD includes 6 state-of-the-art audio deepfake detection models:
