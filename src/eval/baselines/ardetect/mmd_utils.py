@@ -155,9 +155,30 @@ def MMD_3_Sample_Test(
     u_xz = torch.sum(Kxz) / (X.shape[0] * Z.shape[0])
 
     t = u_yy - 2 * u_xy - (u_zz - 2 * u_xz)
-    if Diff_Var.item() <= 0:
+
+    # Check for NaN values in t
+    if torch.isnan(t).any():
+        logger.warning("t contains NaN values, returning p_value=1.0")
+        return 1.0
+
+    # Ensure Diff_Var is positive and not too small
+    if Diff_Var.item() <= 0 or torch.isnan(Diff_Var).any():
         Diff_Var = torch.max(torch.tensor(epsilon), torch.tensor(1e-08))
-    p_value = torch.distributions.Normal(0, 1).cdf(-t / torch.sqrt((Diff_Var)))
+
+    # Compute the test statistic safely
+    sqrt_diff_var = torch.sqrt(Diff_Var)
+    if sqrt_diff_var == 0 or torch.isnan(sqrt_diff_var):
+        logger.warning("sqrt(Diff_Var) is zero or NaN, returning p_value=1.0")
+        return 1.0
+
+    test_stat = -t / sqrt_diff_var
+
+    # Check if test_stat is NaN or inf
+    if torch.isnan(test_stat).any() or torch.isinf(test_stat).any():
+        logger.warning("Test statistic is NaN or inf, returning p_value=1.0")
+        return 1.0
+
+    p_value = torch.distributions.Normal(0, 1).cdf(test_stat)
 
     return p_value.item()
 
