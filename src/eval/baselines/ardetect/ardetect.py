@@ -84,13 +84,18 @@ class ARDetect(Baseline):
                 pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
                 pbar.update(1)
 
-    def train(self, train_data: List[np.ndarray], train_labels: List[Label], eval_data: List[np.ndarray], eval_labels: List[Label], dataset_name: str, sr: int):
+    def train(self, train_data: List[np.ndarray], train_labels: List[Label], eval_data: List[np.ndarray], eval_labels: List[Label], dataset_name: str, sr: int, ref_num: int = 512):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_fea = self._load_features(train_data, cache_name=f"train_{dataset_name}")
         train_real = np.array(train_fea)[np.array(train_labels) == Label.real]
         train_fake = np.array(train_fea)[np.array(train_labels) == Label.fake]
         train_real = torch.from_numpy(train_real).squeeze(1).to(self.device)
         train_fake = torch.from_numpy(train_fake).squeeze(1).to(self.device)
+        
+        train_only_real = train_real[ref_num:]
+        train_only_fake = train_fake[ref_num:]
+        ref_real = train_real[:ref_num]
+        ref_fake = train_fake[:ref_num]
 
         log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
         logger.info(f"Training ARDetect on {dataset_name}")
@@ -102,9 +107,9 @@ class ARDetect(Baseline):
         save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         for epoch in range(args['num_epoch']):
-            self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
+            self._train_epoch(epoch, train_only_real, train_only_fake, batch_size=args['batch_size'])
             if epoch % 4 == 0:
-                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, fea_real=train_real, fea_fake=train_fake, sr=sr)
+                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, fea_real=ref_real, fea_fake=ref_fake, sr=sr)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
                     best_eer = eer
@@ -153,13 +158,13 @@ class ARDetect(Baseline):
             
         return features
 
-    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False) -> Tuple[List[np.ndarray], List[Label]]:
+    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = True, seed: int = 42) -> Tuple[List[np.ndarray], List[Label]]:
         data = []
         labels = []
         logger.info(f"Loading default ASVspoof2019 LA {split} ...")
         dataset = load_dataset("Bisher/ASVspoof_2019_LA", split=split)
         if shuffle:
-            dataset = dataset.shuffle(seed=42)
+            dataset = dataset.shuffle(seed=seed)
         real_count = 0
         fake_count = 0
         for item in dataset:
@@ -215,15 +220,16 @@ class ARDetect(Baseline):
         ref_labels: Optional[np.ndarray] = None
     ) -> dict:
         if not in_domain:
+            seed = 50
             dataset_name = "default"
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
             if not os.path.exists(default_ckpt):
                 logger.info(f"Default model not found at {default_ckpt}, training from scratch")
-                train_data, train_labels = self._load_default(split="train", limit=4096)
-                eval_data, eval_labels = self._load_default(split="validation", limit=512)
-                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name=dataset_name, sr=sr)
+                train_data, train_labels = self._load_default(split="train", limit=2048, shuffle=False)
+                eval_data, eval_labels = self._load_default(split="validation", limit=512, shuffle=False)
+                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name=dataset_name, sr=sr, ref_num=512)
             self.net.load_state_dict(default_ckpt)
-            ref_data, ref_labels = self._load_default(split="train", limit=512)
+            ref_data, ref_labels = self._load_default(split="train", limit=512, shuffle=False)
 
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real = np.array(ref_fea)[ref_labels == Label.real]
@@ -257,7 +263,7 @@ class ARDetect(Baseline):
                 score = self._three_sample_test(fea_test, fea_real, fea_fake, round=4)
                 scores.append(score)
             else:
-                logger.warning(f"Audio too short to test")
+                # logger.warning(f"Audio too short to test")
                 scores.append(1)
 
         scores = np.array(scores)
