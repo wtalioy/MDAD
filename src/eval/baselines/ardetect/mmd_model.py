@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 import math
-from typing import Optional
 
 from transformers.models.bert import (
     BertPreTrainedModel,
@@ -141,21 +140,6 @@ class MMDBaseModel(nn.Module):
         if self.transformer_flag:
             self.transformer = Bert_Transformer_Layer(self.fusion_config)
         self.feature = nn.Linear(config["hid_dim"] * token_num, config["out_dim"])
-
-    def forward1(self, features):
-        features = features
-        if self.transformer_flag:
-            features, _ = self.transformer(features)
-        return features
-
-    def forward2(self, features):
-        features = self.mlp(features)
-        if self.num_mlp > 0:
-            for _ in range(1):
-                for mlp in self.mlp2:
-                    features = mlp(features)
-        features = self.feature(features.view(features.shape[0], -1))
-        return features
 
     def forward(self, features):
         """
