@@ -122,7 +122,7 @@ def calculate_domain_duration(domain_path):
                 for file in files:
                     if file.lower().endswith(('.wav', '.mp3', '.flac', '.m4a', '.aac')):
                         file_path = Path(root) / file
-                        duration = get_audio_duration(file_path)
+                        duration = get_audio_duration(str(file_path))
                         results['real']['duration'] += duration
                         results['real']['count'] += 1
         
@@ -132,7 +132,7 @@ def calculate_domain_duration(domain_path):
                 for file in files:
                     if file.lower().endswith(('.wav', '.mp3', '.flac', '.m4a', '.aac')):
                         file_path = Path(root) / file
-                        duration = get_audio_duration(file_path)
+                        duration = get_audio_duration(str(file_path))
                         results['fake']['duration'] += duration
                         results['fake']['count'] += 1
         
