@@ -129,7 +129,8 @@ def MMD_3_Sample_Test(
     fea_z_org,
     sigma,
     sigma0,
-    epsilon
+    epsilon,
+    alpha
 ):
     """Run three-sample test (TST) using deep kernel kernel."""
     X = ref_fea.clone().detach()
@@ -151,6 +152,8 @@ def MMD_3_Sample_Test(
 
     u_yy = torch.sum(Kyynd) / (Y.shape[0] * (Y.shape[0] - 1))
     u_zz = torch.sum(Kzznd) / (Z.shape[0] * (Z.shape[0] - 1))
+    # u_yy = torch.sum(Kyynd) / (Y.shape[0])
+    # u_zz = torch.sum(Kzznd) / (Z.shape[0])
     u_xy = torch.sum(Kxy) / (X.shape[0] * Y.shape[0])
     u_xz = torch.sum(Kxz) / (X.shape[0] * Z.shape[0])
 
@@ -158,8 +161,8 @@ def MMD_3_Sample_Test(
 
     # Check for NaN values in t
     if torch.isnan(t).any():
-        logger.warning("t contains NaN values, returning p_value=1.0")
-        return 1.0
+        logger.warning("t contains NaN values")
+        return 1, 0.0
 
     # Ensure Diff_Var is positive and not too small
     if Diff_Var.item() <= 0 or torch.isnan(Diff_Var).any():
@@ -168,19 +171,19 @@ def MMD_3_Sample_Test(
     # Compute the test statistic safely
     sqrt_diff_var = torch.sqrt(Diff_Var)
     if sqrt_diff_var == 0 or torch.isnan(sqrt_diff_var):
-        logger.warning("sqrt(Diff_Var) is zero or NaN, returning p_value=1.0")
-        return 1.0
+        logger.warning("sqrt(Diff_Var) is zero or NaN")
+        return 1, 0.0
 
     test_stat = -t / sqrt_diff_var
 
     # Check if test_stat is NaN or inf
     if torch.isnan(test_stat).any() or torch.isinf(test_stat).any():
-        logger.warning("Test statistic is NaN or inf, returning p_value=1.0")
-        return 1.0
+        logger.warning("Test statistic is NaN or inf")
+        return 1, 0.0
 
-    p_value = torch.distributions.Normal(0, 1).cdf(test_stat)
+    p_value = torch.distributions.Normal(0, 1).cdf(test_stat).item()
 
-    return p_value.item()
+    return p_value
 
 
 def h1_mean_var_gram(

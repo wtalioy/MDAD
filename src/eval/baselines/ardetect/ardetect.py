@@ -20,6 +20,7 @@ class ARDetect(Baseline):
         self.device = device
         self.sample_rate = 16000
         self.segment_sec = 0.625
+        self.ref_num = 200
         self.supported_metrics = ['eer', 'auroc']
 
         self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-xls-r-2b")
@@ -41,6 +42,13 @@ class ARDetect(Baseline):
 
         torch.manual_seed(args['seed'])
         torch.cuda.manual_seed(args['seed'])
+
+    def _split_features(self, fea: torch.Tensor, labels: List[Label]) -> Tuple[torch.Tensor, torch.Tensor]:
+        fea_real = np.array(fea)[np.array(labels) == Label.real]
+        fea_fake = np.array(fea)[np.array(labels) == Label.fake]
+        fea_real = torch.from_numpy(fea_real).squeeze(1).to(self.device)
+        fea_fake = torch.from_numpy(fea_fake).squeeze(1).to(self.device)
+        return fea_real, fea_fake
 
     def _train_epoch(self, epoch: int, fea_real: torch.Tensor, fea_fake: torch.Tensor, batch_size: int):
         self.net.basemodel.train()
@@ -84,20 +92,24 @@ class ARDetect(Baseline):
                 pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
                 pbar.update(1)
 
-    def train(self, train_data: List[np.ndarray], train_labels: List[Label], eval_data: List[np.ndarray], eval_labels: List[Label], dataset_name: str, sr: int, ref_num: int = 512):
+    def train(
+        self,
+        train_data: List[np.ndarray],
+        train_labels: List[Label],
+        eval_data: List[np.ndarray],
+        eval_labels: List[Label],
+        ref_data: List[np.ndarray],
+        ref_labels: List[Label],
+        dataset_name: str,
+        sr: int,
+    ):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_fea = self._load_features(train_data, cache_name=f"train_{dataset_name}")
-        train_real = np.array(train_fea)[np.array(train_labels) == Label.real]
-        train_fake = np.array(train_fea)[np.array(train_labels) == Label.fake]
-        train_real = torch.from_numpy(train_real).squeeze(1).to(self.device)
-        train_fake = torch.from_numpy(train_fake).squeeze(1).to(self.device)
-        
-        train_only_real = train_real[ref_num:]
-        train_only_fake = train_fake[ref_num:]
-        ref_real = train_real[:ref_num]
-        ref_fake = train_fake[:ref_num]
+        train_real, train_fake = self._split_features(train_fea, train_labels)
+        ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
+        ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
-        log_id = logger.add("logs/train.log", rotation="100 MB", retention="60 days")
+        log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
         logger.info(f"Training ARDetect on {dataset_name}")
         
         self._init_train(args)
@@ -107,9 +119,9 @@ class ARDetect(Baseline):
         save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         for epoch in range(args['num_epoch']):
-            self._train_epoch(epoch, train_only_real, train_only_fake, batch_size=args['batch_size'])
+            self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
             if epoch % 4 == 0:
-                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, fea_real=ref_real, fea_fake=ref_fake, sr=sr)
+                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, ref_real=ref_real, ref_fake=ref_fake, sr=sr, epoch=epoch)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
                     best_eer = eer
@@ -158,9 +170,9 @@ class ARDetect(Baseline):
             
         return features
 
-    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = True, seed: int = 42) -> Tuple[List[np.ndarray], List[Label]]:
-        data = []
-        labels = []
+    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False, seed: Optional[int] = 42) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+        real_data = []
+        fake_data = []
         logger.info(f"Loading default ASVspoof2019 LA {split} ...")
         dataset = load_dataset("Bisher/ASVspoof_2019_LA", split=split)
         if shuffle:
@@ -169,17 +181,20 @@ class ARDetect(Baseline):
         fake_count = 0
         for item in dataset:
             if item["key"] == 0 and real_count < limit:
-                labels.append(Label.real)
+                real_data.append(item["audio"]["array"])
                 real_count += 1
-                data.append(item["audio"]["array"])
             elif item["key"] == 1 and fake_count < limit:
-                labels.append(Label.fake)
+                fake_data.append(item["audio"]["array"])
                 fake_count += 1
-                data.append(item["audio"]["array"])
             if real_count >= limit and fake_count >= limit:
                 break
 
-        return data, np.array(labels)
+        return real_data, fake_data
+
+    def _aggregate_data(self, real_data: List[np.ndarray], fake_data: List[np.ndarray]) -> Tuple[List[np.ndarray], List[Label]]:
+        data = real_data + fake_data
+        labels = [Label.real] * len(real_data) + [Label.fake] * len(fake_data)
+        return data, labels
 
     def _segment_audio(self, audio: np.ndarray) -> List[np.ndarray]:
         segment_length = round(self.segment_sec * self.sample_rate)
@@ -211,32 +226,31 @@ class ARDetect(Baseline):
     def evaluate(
         self,
         data: List[np.ndarray],
-        labels: np.ndarray,
+        labels: List[Label],
         metrics: List[str],
         sr: int,
         in_domain: bool = False,
         dataset_name: Optional[str] = None,
         ref_data: Optional[List[np.ndarray]] = None,
-        ref_labels: Optional[np.ndarray] = None
+        ref_labels: Optional[List[Label]] = None
     ) -> dict:
         if not in_domain:
-            seed = 50
             dataset_name = "default"
+            ref_data, ref_labels = self._aggregate_data(*self._load_default(split="train", limit=self.ref_num, seed=42))
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
             if not os.path.exists(default_ckpt):
                 logger.info(f"Default model not found at {default_ckpt}, training from scratch")
-                train_data, train_labels = self._load_default(split="train", limit=2048, shuffle=False)
-                eval_data, eval_labels = self._load_default(split="validation", limit=512, shuffle=False)
-                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name=dataset_name, sr=sr, ref_num=512)
+                train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num, seed=42)
+                train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
+                train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
+                eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=512, seed=42))
+                self.train(train_data, train_labels, eval_data, eval_labels, ref_data, ref_labels, dataset_name=dataset_name, sr=sr)
             self.net.load_state_dict(default_ckpt)
-            ref_data, ref_labels = self._load_default(split="train", limit=512, shuffle=False)
 
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
-        ref_real = np.array(ref_fea)[ref_labels == Label.real]
-        ref_fake = np.array(ref_fea)[ref_labels == Label.fake]
-        ref_real = torch.from_numpy(ref_real).squeeze(1).to(self.device)
-        ref_fake = torch.from_numpy(ref_fake).squeeze(1).to(self.device)
+        ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
+        labels = np.array(labels)
         if Label.real != 1:
             labels = 1 - labels
 
@@ -251,28 +265,27 @@ class ARDetect(Baseline):
         return results
 
     @torch.inference_mode()
-    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, fea_real: torch.Tensor, fea_fake: torch.Tensor, sr: int) -> float:
+    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int, epoch: Optional[int] = None) -> float:
         self.net.basemodel.eval()
         scores = []
-        for audio in tqdm(data, desc="Evaluating EER"):
+        for i, audio in enumerate(tqdm(data, desc="Evaluating EER")):
             if sr != self.sample_rate:
                 audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
             segments = self._segment_audio(audio)
             if len(segments) > 1:
                 fea_test = self._load_features(segments)
-                score = self._three_sample_test(fea_test, fea_real, fea_fake, round=4)
+                score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
                 scores.append(score)
             else:
                 # logger.warning(f"Audio too short to test")
                 scores.append(1)
-
         scores = np.array(scores)
         eer, _ = self._compute_eer(scores, labels)
         
         return float(eer)
 
     @torch.inference_mode()
-    def _evaluate_auroc(self, data: List[np.ndarray], labels: np.ndarray, fea_real: torch.Tensor, fea_fake: torch.Tensor, sr: int) -> float:
+    def _evaluate_auroc(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int) -> float:
         self.net.basemodel.eval()
         scores = []
         for audio in tqdm(data, desc="Evaluating AUROC"):
@@ -281,7 +294,7 @@ class ARDetect(Baseline):
             segments = self._segment_audio(audio)
             if len(segments) > 1:
                 fea_test = self._load_features(segments)
-                score = self._three_sample_test(fea_test, fea_real, fea_fake, round=4)
+                score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=4)
                 scores.append(score)
             else:
                 logger.warning(f"Audio too short to test")
@@ -294,8 +307,9 @@ class ARDetect(Baseline):
         fea_test_single: List[torch.Tensor],
         fea_real: torch.Tensor,
         fea_fake: torch.Tensor,
-        round: int = 10,
-    ) -> float:
+        round: int = 1,
+        alpha: float = 0.498
+    ) -> Tuple[float, List[float]]:
         fea_test = torch.cat(fea_test_single, dim=0).to(self.device)
         min_len = min(len(fea_real), len(fea_fake), len(fea_test))
 
@@ -321,6 +335,7 @@ class ARDetect(Baseline):
                 self.net.sigma,
                 self.net.sigma0_u,
                 self.net.ep,
+                alpha
             )
         
             p_value_list.append(p_value)
@@ -332,7 +347,8 @@ class ARDetect(Baseline):
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         
         _, p_value = combine_pvalues(p_value_list, method='stouffer')
-        return p_value
+        
+        return p_value, p_value_list
 
     def _compute_eer(self, scores: np.ndarray, labels: np.ndarray) -> Tuple[Any, Any]:
         fpr, tpr, thresholds = roc_curve(labels, scores)
