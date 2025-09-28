@@ -77,21 +77,16 @@ class BaseDataset:
             data = self.data['test']
             labels = self.labels['test']
             if baseline.name == 'ARDetect':
-                ref_data = self.data['train']
-                ref_labels = self.labels['train']
-                return baseline.evaluate(
-                    data=data,
-                    labels=labels,
-                    ref_data=ref_data,
-                    ref_labels=ref_labels,
-                    metrics=metrics,
-                    sr=self.sr,
-                    in_domain=True,
-                    dataset_name=self.name
-                )
+                ref_data = self.data['train'][:baseline.ref_num]
+                ref_labels = self.labels['train'][:baseline.ref_num]
+            else:
+                ref_data = None
+                ref_labels = None
             return baseline.evaluate(
                 data=data,
                 labels=labels,
+                ref_data=ref_data,
+                ref_labels=ref_labels,
                 metrics=metrics,
                 sr=self.sr,
                 in_domain=True,
@@ -99,7 +94,7 @@ class BaseDataset:
             )
         else:
             data = reduce(lambda x, y: x + y, list(self.data.values()))
-            labels = np.concatenate([self.labels[split] for split in self.splits])
+            labels = reduce(lambda x, y: x + y, list(self.labels.values()))
             return baseline.evaluate(
                 data=data,
                 labels=labels,
@@ -118,8 +113,16 @@ class BaseDataset:
         Returns:
             Path to the checkpoint file
         """
-        train_data = self.data['train']
-        train_labels = self.labels['train']
+        if baseline.name == 'ARDetect':
+            train_data = self.data['train'][baseline.ref_num:]
+            train_labels = self.labels['train'][baseline.ref_num:]
+            ref_data = self.data['train'][:baseline.ref_num]
+            ref_labels = self.labels['train'][:baseline.ref_num]
+        else:
+            train_data = self.data['train']
+            train_labels = self.labels['train']
+            ref_data = None
+            ref_labels = None
         eval_data = self.data['dev']
         eval_labels = self.labels['dev']
         baseline.train(
@@ -127,6 +130,8 @@ class BaseDataset:
             train_labels=train_labels,
             eval_data=eval_data,
             eval_labels=eval_labels,
+            ref_data=ref_data,
+            ref_labels=ref_labels,
             dataset_name=self.name,
             sr=self.sr
         )
