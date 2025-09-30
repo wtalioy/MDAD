@@ -19,12 +19,12 @@ class ARDetect(Baseline):
         self.name = "ARDetect"
         self.device = device
         self.sample_rate = 16000
-        self.segment_sec = 0.625
         self.ref_num = 200
+        self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-xls-r-2b")
-        self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-xls-r-2b").to(device)
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./wav2vec2-xls-r-2b")
+        self.model = Wav2Vec2Model.from_pretrained("./wav2vec2-xls-r-2b").to(device)
         self.model.eval()
 
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
@@ -121,6 +121,7 @@ class ARDetect(Baseline):
         for epoch in range(args['num_epoch']):
             self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
             if epoch % 4 == 0:
+                self._precompute_ref_cache(ref_real, ref_fake)
                 eer = self._evaluate_eer(data=eval_data, labels=eval_labels, ref_real=ref_real, ref_fake=ref_fake, sr=sr, epoch=epoch)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
@@ -170,13 +171,13 @@ class ARDetect(Baseline):
             
         return features
 
-    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False, seed: Optional[int] = 42) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False, seed: Optional[int] = None) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         real_data = []
         fake_data = []
         logger.info(f"Loading default ASVspoof2019 LA {split} ...")
         dataset = load_dataset("Bisher/ASVspoof_2019_LA", split=split)
         if shuffle:
-            dataset = dataset.shuffle(seed=seed)
+            dataset = dataset.shuffle(seed=seed if seed is not None else self.seed)
         real_count = 0
         fake_count = 0
         for item in dataset:
@@ -196,32 +197,15 @@ class ARDetect(Baseline):
         labels = [Label.real] * len(real_data) + [Label.fake] * len(fake_data)
         return data, labels
 
-    def _segment_audio(self, audio: np.ndarray) -> List[np.ndarray]:
-        segment_length = round(self.segment_sec * self.sample_rate)
-        
-        total_frames = audio.shape[0]
-        num_full_segments = total_frames // segment_length
-        audio_segments = []
-
-        for i in range(num_full_segments):
-            start_frame = i * segment_length
-            end_frame = start_frame + segment_length
-            audio_segments.append(audio[start_frame:end_frame])
-
-        remaining_frames = total_frames % segment_length
-
-        if remaining_frames > 0:
-            if num_full_segments == 0:
-                audio_segments.append(audio)
-            else:
-                if len(audio_segments) >= 1:
-                    last_segment = audio_segments.pop()
-                    combined_segment = np.concatenate((last_segment, audio[num_full_segments * segment_length:]), axis=0)
-                    audio_segments.append(combined_segment)
-                else:
-                    audio_segments.append(audio[num_full_segments * segment_length:])
-
-        return audio_segments
+    @torch.inference_mode()
+    def _precompute_ref_cache(self, fea_real: torch.Tensor, fea_fake: torch.Tensor):
+        self.net.basemodel.eval()
+        self._ref_cache = {
+            "fea_real": fea_real,
+            "fea_fake": fea_fake,
+        }
+        self._ref_cache["net_real"] = self.net(self._ref_cache["fea_real"])
+        self._ref_cache["net_fake"] = self.net(self._ref_cache["fea_fake"])
 
     def evaluate(
         self,
@@ -234,21 +218,23 @@ class ARDetect(Baseline):
         ref_data: Optional[List[np.ndarray]] = None,
         ref_labels: Optional[List[Label]] = None
     ) -> dict:
+        torch.manual_seed(self.seed)
         if not in_domain:
             dataset_name = "default"
-            ref_data, ref_labels = self._aggregate_data(*self._load_default(split="train", limit=self.ref_num, seed=42))
+            ref_data, ref_labels = self._aggregate_data(*self._load_default(split="train", limit=self.ref_num))
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
             if not os.path.exists(default_ckpt):
                 logger.info(f"Default model not found at {default_ckpt}, training from scratch")
-                train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num, seed=42)
+                train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num)
                 train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
-                eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=512, seed=42))
+                eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=256))
                 self.train(train_data, train_labels, eval_data, eval_labels, ref_data, ref_labels, dataset_name=dataset_name, sr=sr)
             self.net.load_state_dict(default_ckpt)
 
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
+        self._precompute_ref_cache(ref_real, ref_fake)
 
         labels = np.array(labels)
         if Label.real != 1:
@@ -271,14 +257,9 @@ class ARDetect(Baseline):
         for i, audio in enumerate(tqdm(data, desc="Evaluating EER")):
             if sr != self.sample_rate:
                 audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            segments = self._segment_audio(audio)
-            if len(segments) > 1:
-                fea_test = self._load_features(segments)
-                score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
-                scores.append(score)
-            else:
-                # logger.warning(f"Audio too short to test")
-                scores.append(1)
+            fea_test = self._load_features([audio])[0]
+            score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
+            scores.append(score)
         scores = np.array(scores)
         eer, _ = self._compute_eer(scores, labels)
         
@@ -291,47 +272,44 @@ class ARDetect(Baseline):
         for audio in tqdm(data, desc="Evaluating AUROC"):
             if sr != self.sample_rate:
                 audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            segments = self._segment_audio(audio)
-            if len(segments) > 1:
-                fea_test = self._load_features(segments)
-                score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=4)
-                scores.append(score)
-            else:
-                logger.warning(f"Audio too short to test")
-                scores.append(1)
+            fea_test = self._load_features([audio])[0]
+            score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
+            scores.append(score)
         scores = np.array(scores)
         return float(roc_auc_score(labels, scores))
 
     def _three_sample_test(
         self,
-        fea_test_single: List[torch.Tensor],
+        fea_test: torch.Tensor,
         fea_real: torch.Tensor,
         fea_fake: torch.Tensor,
         round: int = 1,
         alpha: float = 0.498
     ) -> Tuple[float, List[float]]:
-        fea_test = torch.cat(fea_test_single, dim=0).to(self.device)
-        min_len = min(len(fea_real), len(fea_fake), len(fea_test))
+        fea_test = fea_test.to(self.device)
+        net_test = self.net(fea_test)
+        fea_real = self._ref_cache["fea_real"]
+        net_real = self._ref_cache["net_real"]
+        fea_fake = self._ref_cache["fea_fake"]
+        net_fake = self._ref_cache["net_fake"]
+
+        idx_real = torch.randperm(len(fea_real))
+        idx_fake = torch.randperm(len(fea_fake))
+        fea_real = fea_real[idx_real]
+        fea_fake = fea_fake[idx_fake]
+        net_real = net_real[idx_real]
+        net_fake = net_fake[idx_fake]
 
         p_value_list = []
 
-        for _ in range(max(round, 1)):
-            fea_real_sample = fea_real[torch.randperm(len(fea_real))[:min_len]]
-            fea_fake_sample = fea_fake[torch.randperm(len(fea_fake))[:min_len]]
-            fea_test_sample = fea_test[torch.randperm(len(fea_test))[:min_len]]
-
-            with torch.inference_mode():
-                net_test = self.net(fea_test_sample)
-                net_real = self.net(fea_real_sample)
-                net_fake = self.net(fea_fake_sample)
-
+        for i in range(max(round, 1)):
             p_value = MMD_3_Sample_Test(
                 net_test,
-                net_real,
-                net_fake,
-                fea_test_sample.view(fea_test_sample.shape[0], -1),
-                fea_real_sample.view(fea_real_sample.shape[0], -1),
-                fea_fake_sample.view(fea_fake_sample.shape[0], -1),
+                net_real[[i]],
+                net_fake[[i]],
+                fea_test.view(fea_test.shape[0], -1),
+                fea_real[[i]].view(fea_real[[i]].shape[0], -1),
+                fea_fake[[i]].view(fea_fake[[i]].shape[0], -1),
                 self.net.sigma,
                 self.net.sigma0_u,
                 self.net.ep,
@@ -339,11 +317,7 @@ class ARDetect(Baseline):
             )
         
             p_value_list.append(p_value)
-            
-            del (fea_real_sample, fea_fake_sample, fea_test_sample,
-                 net_test, net_real, net_fake)
 
-        del fea_real, fea_fake, fea_test
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         
         _, p_value = combine_pvalues(p_value_list, method='stouffer')

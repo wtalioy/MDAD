@@ -24,8 +24,8 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
     Kyynd = Kyy - torch.diag(torch.diag(Kyy))
     Kzznd = Kzz - torch.diag(torch.diag(Kzz))
 
-    u_yy = torch.sum(Kyynd) * (1.0 / (n * (n - 1)))
-    u_zz = torch.sum(Kzznd) * (1.0 / (r * (r - 1)))
+    u_yy = torch.sum(Kyynd) * (1.0 / n)
+    u_zz = torch.sum(Kzznd) * (1.0 / r)
     u_xy = torch.sum(Kxy) / (m * n)
     u_xz = torch.sum(Kxz) / (m * r)
 
@@ -45,7 +45,7 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
         epsilon_tensor = torch.tensor(epsilon, device=Kyy.device)
     zeta1 = torch.max(t1 + t2 + t3 + t4 + t5 + t6 - 2 * (t7 + t8 + t9), epsilon_tensor)
     zeta2 = torch.max(
-        (1 / m / (m - 1)) * torch.sum((Kyynd - Kzznd - Kxy.T - Kxy + Kxz + Kxz.T) ** 2)
+        (1 / m) * torch.sum((Kyynd - Kzznd - Kxy.T - Kxy + Kxz + Kxz.T) ** 2)
         - (u_yy - 2 * u_xy - (u_zz - 2 * u_xz)) ** 2,
         epsilon_tensor,
     )
@@ -64,8 +64,8 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
         "zeta2": zeta2.item(),
     }
 
-    Var = (4 * (m - 2) / (m * (m - 1))) * zeta1
-    Var_z2 = Var + (2.0 / (m * (m - 1))) * zeta2
+    Var = (4 * (m - 2) / m) * zeta1
+    Var_z2 = Var + (2.0 / m) * zeta2
 
     return Var, Var_z2, data
 
@@ -150,10 +150,10 @@ def MMD_3_Sample_Test(
 
     Diff_Var, _, _ = MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon)
 
-    u_yy = torch.sum(Kyynd) / (Y.shape[0] * (Y.shape[0] - 1))
-    u_zz = torch.sum(Kzznd) / (Z.shape[0] * (Z.shape[0] - 1))
-    # u_yy = torch.sum(Kyynd) / (Y.shape[0])
-    # u_zz = torch.sum(Kzznd) / (Z.shape[0])
+    # u_yy = torch.sum(Kyynd) / (Y.shape[0] * (Y.shape[0] - 1))
+    # u_zz = torch.sum(Kzznd) / (Z.shape[0] * (Z.shape[0] - 1))
+    u_yy = torch.sum(Kyynd) / (Y.shape[0])
+    u_zz = torch.sum(Kzznd) / (Z.shape[0])
     u_xy = torch.sum(Kxy) / (X.shape[0] * Y.shape[0])
     u_xz = torch.sum(Kxz) / (X.shape[0] * Z.shape[0])
 
