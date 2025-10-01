@@ -53,8 +53,6 @@ class ARDetect(Baseline):
     def _train_epoch(self, epoch: int, fea_real: torch.Tensor, fea_fake: torch.Tensor, batch_size: int):
         self.net.basemodel.train()
 
-        fea_real = fea_real[torch.randperm(fea_real.shape[0])]
-        fea_fake = fea_fake[torch.randperm(fea_fake.shape[0])]
         min_len = min(len(fea_real), len(fea_fake))
         fea_real = fea_real[:min_len]
         fea_fake = fea_fake[:min_len]
@@ -122,7 +120,7 @@ class ARDetect(Baseline):
             self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
             if epoch % 4 == 0:
                 self._precompute_ref_cache(ref_real, ref_fake)
-                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, ref_real=ref_real, ref_fake=ref_fake, sr=sr, epoch=epoch)
+                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, ref_real=ref_real, ref_fake=ref_fake, sr=sr)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
                     best_eer = eer
@@ -136,7 +134,7 @@ class ARDetect(Baseline):
         self,
         audio_data: List[np.ndarray],
         cache_name: Optional[str] = None,
-        batch_size: int = 8,
+        batch_size: int = 32,
     ) -> List[torch.Tensor]:
         if cache_name is not None:
             cache_path = os.path.join(os.path.dirname(__file__), "cache", f"{cache_name}.pt")
@@ -151,7 +149,7 @@ class ARDetect(Baseline):
                 batch_audio,
                 sampling_rate=self.sample_rate,
                 padding="max_length",
-                max_length=10000,
+                max_length=15000,
                 truncation=True,
                 return_tensors="pt",
             )
@@ -228,7 +226,7 @@ class ARDetect(Baseline):
                 train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num)
                 train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
-                eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=256))
+                eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=768))
                 self.train(train_data, train_labels, eval_data, eval_labels, ref_data, ref_labels, dataset_name=dataset_name, sr=sr)
             self.net.load_state_dict(default_ckpt)
 
@@ -251,13 +249,13 @@ class ARDetect(Baseline):
         return results
 
     @torch.inference_mode()
-    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int, epoch: Optional[int] = None) -> float:
+    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int) -> float:
         self.net.basemodel.eval()
+        if sr != self.sample_rate:
+            data = [librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate) for audio in data]
+        fea_data = self._load_features(data)
         scores = []
-        for i, audio in enumerate(tqdm(data, desc="Evaluating EER")):
-            if sr != self.sample_rate:
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            fea_test = self._load_features([audio])[0]
+        for fea_test in tqdm(fea_data, desc="Evaluating EER"):
             score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
             scores.append(score)
         scores = np.array(scores)
@@ -268,11 +266,11 @@ class ARDetect(Baseline):
     @torch.inference_mode()
     def _evaluate_auroc(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int) -> float:
         self.net.basemodel.eval()
+        if sr != self.sample_rate:
+            data = [librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate) for audio in data]
+        fea_data = self._load_features(data)
         scores = []
-        for audio in tqdm(data, desc="Evaluating AUROC"):
-            if sr != self.sample_rate:
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
-            fea_test = self._load_features([audio])[0]
+        for fea_test in tqdm(fea_data, desc="Evaluating AUROC"):
             score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
             scores.append(score)
         scores = np.array(scores)
