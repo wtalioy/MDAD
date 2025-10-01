@@ -32,7 +32,7 @@ class Baseline:
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
 
-    def _prepare_loader(self, data: List[np.ndarray], labels: np.ndarray, batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
+    def _prepare_loader(self, data: List[np.ndarray], labels: List[Label], batch_size: int = 128, shuffle: bool = True, drop_last: bool = True, num_workers: int = 8):
         def pad(x, max_len=64600):
             x_len = x.shape[0]
             if x_len >= max_len:

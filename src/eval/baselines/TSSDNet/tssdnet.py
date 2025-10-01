@@ -94,7 +94,7 @@ class TSSDNet_Base(Baseline):
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt)["model_state_dict"])
             if Label.real != 0:
-                labels = 1 - labels
+                labels = [1 - label for label in labels]
         eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=32)
 
         results = {}
