@@ -1,7 +1,7 @@
-# MTAD: Large-scale Multi-Topic Audio Deepfake Benchmark
-[![Hugging Face%20-%20MTAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20MTAD-blue)](https://huggingface.co/datasets/Lioy/MTAD)
+# MDAD: Large-scale Multi-Domain Audio Deepfake Benchmark
+[![Hugging Face%20-%20MDAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20MTAD-blue)](https://huggingface.co/datasets/Lioy/MDAD)
 
-MTAD is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio across diverse topics. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
+MDAD is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio across diverse domains. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
 
 ## 🔥 Features
 
@@ -38,14 +38,14 @@ MTAD is a large-scale benchmark for both evaluating audio deepfake detection and
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/wtalioy/MTAD.git
+git clone https://github.com/wtalioy/MDAD.git
 cd MTAD
 ```
 
 2. **Install dependencies**:
 ```bash
-conda create -n mtad python=3.12 -y
-conda activate mtad
+conda create -n mdad python=3.12 -y
+conda activate mdad
 pip install -r requirements.txt
 python -m unidic download
 cd src/generation/models/tts/vits/monotonic_align
@@ -54,20 +54,11 @@ cd ../../../../../..
 ```
 
 3. **Download datasets**: 
-Place MTAD dataset files in the `data/` directory following this structure:
-```
-data/
-├── Audiobook/
-├── Emotional/
-├── Interview/
-├── Movie/
-├── News/
-├── NoisySpeech/
-├── PartialFake/
-├── PhoneCall/
-├── Podcast/
-├── PublicFigure/
-└── PublicSpeech/
+```bash
+mkdir data
+cd data
+hf download Lioy/MDAD --repo-type dataset
+cd ../..
 ```
 
 ## 🚀 Quick Start
