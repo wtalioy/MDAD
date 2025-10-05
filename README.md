@@ -265,7 +265,7 @@ MTAD/
 │   │   │   ├── TSSDNet/
 │   │   │   ├── RawGAT_ST/
 │   │   │   └── ardetect/
-│   │   └── cmad_datasets/        # Dataset loading implementations
+│   │   └── mdad_datasets/        # Dataset loading implementations
 │   ├── generation/               # Audio generation tools
 │   │   ├── main.py               # Main generation script
 │   │   ├── models/               # TTS and Voice Conversion models
@@ -316,11 +316,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use MTAD in your research, please cite:
 
 ```bibtex
-@inproceedings{mtad2024,
-  title={MTAD: Large-scale Multi-topic Audio Deepfake Benchmark},
-  author={Your Name and Collaborators},
+@inproceedings{mdad2026,
+  title={Benchmarking Robust Multilingual, Multidimensional Audio Deepfake Detection},
+  author={Ruiming Wang},
   booktitle={Conference Name},
-  year={2024}
+  year={2026}
 }
 ```
 
