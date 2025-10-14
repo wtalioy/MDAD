@@ -24,10 +24,7 @@ class Baseline:
         return config
 
     def _load_train_config(self, model_dir: str, dataset_name: str) -> dict:
-        config_path = os.path.join(model_dir, "config", f"train_{dataset_name.lower()}.yaml")
-        if not os.path.exists(config_path):
-            config_path = os.path.join(model_dir, "config", "train_default.yaml")
-            shutil.copy(config_path, os.path.join(model_dir, "config", f"train_{dataset_name.lower()}.yaml"))
+        config_path = os.path.join(model_dir, "config", f"train_default.yaml")
         with open(config_path, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
