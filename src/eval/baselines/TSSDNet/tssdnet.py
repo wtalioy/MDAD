@@ -48,15 +48,18 @@ class TSSDNet_Base(Baseline):
                     lam = torch.tensor(lam, requires_grad=False)
                     index = torch.randperm(len(labels))
                     samples = lam*samples + (1-lam)*samples[index, :]
+                    samples = samples.unsqueeze(1)
                     preds = self.model(samples)
                     labels_b = labels[index]
                     loss = lam * F.cross_entropy(preds, labels) + (1 - lam) * F.cross_entropy(preds, labels_b)
                 else:
+                    samples = samples.unsqueeze(1)
                     preds = self.model(samples)
                     loss = F.cross_entropy(preds, labels)
 
                 self.optimizer.zero_grad()
                 loss.backward()
+                self.optimizer.step()
                 pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
                 pbar.update(1)
 
@@ -72,7 +75,7 @@ class TSSDNet_Base(Baseline):
 
         best_eer = 100
         best_epoch = 0
-        save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
+        save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{self.name[:3]}_{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
         for epoch in range(train_config["num_epoch"]):
@@ -90,7 +93,7 @@ class TSSDNet_Base(Baseline):
 
     def evaluate(self, data: List[np.ndarray], labels: List[Label], metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:
-            self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
+            self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{self.name[:3]}_{dataset_name}_best.pt")))
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt)["model_state_dict"])
             if Label.real != 0:
