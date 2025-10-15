@@ -73,35 +73,28 @@ class BaseDataset:
         Returns:
             Dictionary containing evaluation results
         """
+        ref_data = None
+        ref_labels = None
         if in_domain:
             data = self.data['test']
             labels = self.labels['test']
-            if baseline.name == 'ARDetect':
+            if baseline.name == 'MKRT':
                 ref_data = self.data['train'][:baseline.ref_num]
                 ref_labels = self.labels['train'][:baseline.ref_num]
-            else:
-                ref_data = None
-                ref_labels = None
-            return baseline.evaluate(
-                data=data,
-                labels=labels,
-                ref_data=ref_data,
-                ref_labels=ref_labels,
-                metrics=metrics,
-                sr=self.sr,
-                in_domain=True,
-                dataset_name=self.name
-            )
         else:
             data = reduce(lambda x, y: x + y, list(self.data.values()))
             labels = reduce(lambda x, y: x + y, list(self.labels.values()))
-            return baseline.evaluate(
-                data=data,
-                labels=labels,
-                metrics=metrics,
-                sr=self.sr,
-                in_domain=False
-            )
+            
+        return baseline.evaluate(
+            data=data,
+            labels=labels,
+            ref_data=ref_data,
+            ref_labels=ref_labels,
+            metrics=metrics,
+            sr=self.sr,
+            in_domain=in_domain,
+            dataset_name=self.name
+        )
 
     def train(self, baseline: Baseline):
         """
@@ -113,7 +106,9 @@ class BaseDataset:
         Returns:
             Path to the checkpoint file
         """
-        if baseline.name == 'ARDetect':
+        ref_data = None
+        ref_labels = None
+        if baseline.name == 'MKRT':
             train_data = self.data['train'][baseline.ref_num:]
             train_labels = self.labels['train'][baseline.ref_num:]
             ref_data = self.data['train'][:baseline.ref_num]
@@ -121,8 +116,6 @@ class BaseDataset:
         else:
             train_data = self.data['train']
             train_labels = self.labels['train']
-            ref_data = None
-            ref_labels = None
         eval_data = self.data['dev']
         eval_labels = self.labels['dev']
         baseline.train(

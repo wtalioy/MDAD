@@ -32,8 +32,6 @@ class ASVspoof2021(BaseDataset):
                 return None
 
         indices = list(range(len(hf_dataset)))
-        if len(indices) == 0:
-            return data, np.array(labels)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for result in tqdm(executor.map(_process, indices), total=len(indices), desc="Loading dataset"):
@@ -42,8 +40,11 @@ class ASVspoof2021(BaseDataset):
                 audio, label = result
                 data.append(audio)
                 labels.append(label)
+                
+        split_data = {"test": data}
+        split_labels = {"test": labels}
 
-        return data, np.array(labels)
+        return split_data, split_labels
 
     def train(self, baseline: Baseline) -> str:
         raise NotImplementedError("Training is not supported for ASVspoof2021")
