@@ -8,7 +8,7 @@ from tqdm import tqdm
 class NoisySpeech(BaseRawDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "NoisySpeech"), *args, **kwargs)
-        data_sources = ["News", "Interview", "Podcast", "PublicSpeech", "Audiobook", "Movie", "PhoneCall/en"]
+        data_sources = ["News", "Interview", "Podcast", "PublicSpeech", "Audiobook", "Movie", "PhoneCall"]
         self.data_sources = [os.path.join(data_dir, data_source) for data_source in data_sources]
         self.noise_files = {
             "concert": "src/generation/noise/concert.wav",
@@ -47,10 +47,7 @@ class NoisySpeech(BaseRawDataset):
 
             random.shuffle(domain_meta_data)
             domain_meta_data = domain_meta_data[:int(len(domain_meta_data) * self.ratio)]
-            if data_source.endswith("PhoneCall/en"):
-                source_name = "PhoneCall/en"
-            else:
-                source_name = data_source.split("/")[-1]
+            source_name = data_source.split("/")[-1]
 
             for i, item in enumerate(tqdm(domain_meta_data, desc=f"Processing {source_name}")):
                 os.makedirs(os.path.join(self.data_dir, "audio", f"{source_name.lower()}"), exist_ok=True)
