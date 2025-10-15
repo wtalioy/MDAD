@@ -170,7 +170,6 @@ mdurl==0.1.2
 mecab==0.996.11
 mecab-python3==1.0.9
 mediapy==1.1.6
--e git+https://github.com/myshell-ai/MeloTTS.git@209145371cff8fc3bd60d7be902ea69cbdb7965a#egg=melotts
 mistral_common==1.8.1
 mistune==3.1.3
 monotonic-alignment-search==0.2.0
