@@ -10,13 +10,13 @@ from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
 from baselines import Baseline
-from baselines.ardetect.mmd_model import MMDModel
-from baselines.ardetect.mmd_utils import MMD_3_Sample_Test, MMDu
+from baselines.mkrt.mmd_model import MMDModel
+from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
 from config import Label
 
-class ARDetect(Baseline):
+class MKRT(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
-        self.name = "ARDetect"
+        self.name = "MKRT"
         self.device = device
         self.sample_rate = 16000
         self.ref_num = 200
@@ -108,7 +108,7 @@ class ARDetect(Baseline):
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
         log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
-        logger.info(f"Training ARDetect on {dataset_name}")
+        logger.info(f"Training MKRT on {dataset_name}")
         
         self._init_train(args)
         
@@ -149,7 +149,7 @@ class ARDetect(Baseline):
                 batch_audio,
                 sampling_rate=self.sample_rate,
                 padding="max_length",
-                max_length=15000,
+                max_length=10000,
                 truncation=True,
                 return_tensors="pt",
             )
@@ -173,7 +173,7 @@ class ARDetect(Baseline):
         real_data = []
         fake_data = []
         logger.info(f"Loading default ASVspoof2019 LA {split} ...")
-        dataset = load_dataset("Bisher/ASVspoof_2019_LA", split=split)
+        dataset = load_dataset("./ASVspoof_2019_LA", split=split)
         if shuffle:
             dataset = dataset.shuffle(seed=seed if seed is not None else self.seed)
         real_count = 0
@@ -218,9 +218,8 @@ class ARDetect(Baseline):
     ) -> dict:
         torch.manual_seed(self.seed)
         if not in_domain:
-            dataset_name = "default"
             ref_data, ref_labels = self._aggregate_data(*self._load_default(split="train", limit=self.ref_num))
-            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
+            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
             if not os.path.exists(default_ckpt):
                 logger.info(f"Default model not found at {default_ckpt}, training from scratch")
                 train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num)
@@ -228,8 +227,11 @@ class ARDetect(Baseline):
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
                 eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=768))
                 self.train(train_data, train_labels, eval_data, eval_labels, ref_data, ref_labels, dataset_name=dataset_name, sr=sr)
-            self.net.load_state_dict(default_ckpt)
+        else:
+            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
+            # default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
 
+        self.net.load_state_dict(default_ckpt)
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
         self._precompute_ref_cache(ref_real, ref_fake)
