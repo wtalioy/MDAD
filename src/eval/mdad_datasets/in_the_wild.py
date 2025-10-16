@@ -26,9 +26,6 @@ class InTheWild(BaseDataset):
                 label = Label.real if row[-1] == "bona-fide" else Label.fake
                 tasks.append((path, label))
 
-        if len(tasks) == 0:
-            return data, labels
-
         max_workers = min(32, (os.cpu_count() or 8))
 
         def _load_audio(path_and_label):
@@ -48,7 +45,10 @@ class InTheWild(BaseDataset):
                 data.append(audio)
                 labels.append(label)
 
-        return data, labels
+        split_data = {"test": data}
+        split_labels = {"test": labels}
+
+        return split_data, split_labels
 
     def train(self, baseline: Baseline) -> str:
         raise NotImplementedError("Training is not supported for InTheWild")
