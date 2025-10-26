@@ -5,7 +5,7 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 import torch
-from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
+from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model, HubertModel, AutoProcessor
 from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
@@ -23,8 +23,8 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./wav2vec2-xls-r-2b")
-        self.model = Wav2Vec2Model.from_pretrained("./wav2vec2-xls-r-2b").to(device)
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./hubert-large-ll60k")
+        self.model = HubertModel.from_pretrained("./hubert-large-ll60k").to(device)
         self.model.eval()
 
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
@@ -96,16 +96,25 @@ class MKRT(Baseline):
         train_labels: List[Label],
         eval_data: List[np.ndarray],
         eval_labels: List[Label],
-        ref_data: List[np.ndarray],
-        ref_labels: List[Label],
         dataset_name: str,
-        sr: int,
+        ref_data: Optional[List[np.ndarray]] = None,
+        ref_labels: Optional[List[Label]] = None,
+        sr: int = 16000,
     ):
+        # Validate ref_data and ref_labels for MKRT
+        if ref_data is None or ref_labels is None:
+            raise ValueError("MKRT requires ref_data and ref_labels to be provided")
+        
+        # cache ref_data & ref_labels
+        self.ref_data = ref_data
+        self.ref_labels = ref_labels
+        
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_fea = self._load_features(train_data, cache_name=f"train_{dataset_name}")
         train_real, train_fake = self._split_features(train_fea, train_labels)
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
+        eval_labels = np.array(eval_labels)
 
         log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
         logger.info(f"Training MKRT on {dataset_name}")
@@ -145,22 +154,18 @@ class MKRT(Baseline):
         features = []
         for i in range(0, len(audio_data), batch_size):
             batch_audio = audio_data[i : i + batch_size]
-            inputs = self.extractor(
+            input_values = self.extractor(
                 batch_audio,
                 sampling_rate=self.sample_rate,
                 padding="max_length",
                 max_length=10000,
                 truncation=True,
                 return_tensors="pt",
-            )
-            inputs = {k: v.to(self.device, non_blocking=True) for k, v in inputs.items()}
-
+            ).input_values.to(self.device, non_blocking=True)
             with torch.inference_mode():
-                last_hidden = self.model(**inputs).last_hidden_state.detach().cpu()
-
+                last_hidden = self.model(input_values).last_hidden_state.detach().cpu()
             features.extend(torch.split(last_hidden, 1, dim=0))
-
-            del inputs, last_hidden, batch_audio
+            del input_values, last_hidden, batch_audio
 
         if cache_name is not None:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
@@ -218,6 +223,7 @@ class MKRT(Baseline):
     ) -> dict:
         torch.manual_seed(self.seed)
         if not in_domain:
+            dataset_name = "default"
             ref_data, ref_labels = self._aggregate_data(*self._load_default(split="train", limit=self.ref_num))
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
             if not os.path.exists(default_ckpt):
@@ -226,11 +232,15 @@ class MKRT(Baseline):
                 train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
                 eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=768))
-                self.train(train_data, train_labels, eval_data, eval_labels, ref_data, ref_labels, dataset_name=dataset_name, sr=sr)
+                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name="default", ref_data=ref_data, ref_labels=ref_labels, sr=sr)
         else:
-            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
-            # default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
+            # default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
+            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
 
+        # cached during training
+        if ref_data is None or ref_labels is None:
+            ref_data, ref_labels = self.ref_data, self.ref_labels
+        
         self.net.load_state_dict(default_ckpt)
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
@@ -259,6 +269,9 @@ class MKRT(Baseline):
         scores = []
         for fea_test in tqdm(fea_data, desc="Evaluating EER"):
             score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
+            if np.isnan(score):
+                logger.warning("NaN score encountered")
+                score = 1.0
             scores.append(score)
         scores = np.array(scores)
         eer, _ = self._compute_eer(scores, labels)
