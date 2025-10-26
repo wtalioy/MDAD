@@ -15,8 +15,8 @@ def init_weights(m):
     else:
         if hasattr(m, 'weight'):
             torch.nn.init.kaiming_normal_(m.weight, a=0.01)
-        else:
-            print('no weight',m)
+        # else:
+        #     print('no weight',m)
 
 def cos_sim(a,b):
     return np.dot(a,b) / (np.linalg.norm(a) * np.linalg.norm(b))
