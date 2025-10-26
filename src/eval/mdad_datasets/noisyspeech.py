@@ -58,7 +58,7 @@ class NoisySpeech(BaseDataset):
             source_labels[source_name] = np.array(labels)
         return source_data, source_labels
 
-    def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False) -> dict:
+    def evaluate(self, baseline: Baseline, metrics: List[str], in_domain: bool = False, expr_name: str | None = None) -> dict:
         """
         Evaluate the dataset using a baseline model and specified metrics.
         
@@ -70,9 +70,29 @@ class NoisySpeech(BaseDataset):
         Returns:
             Dictionary containing evaluation results
         """
+        # Handle reference data for MKRT
+        ref_data = None
+        ref_labels = None
+        if baseline.name == 'MKRT' and in_domain:
+            # For MKRT, we need reference data from the training set
+            # Since this is a special dataset, we'll use the first ref_num samples from the first source
+            first_source = list(self.data.keys())[0] if self.data else None
+            if first_source and len(self.data[first_source]) >= baseline.ref_num:
+                ref_data = self.data[first_source][:baseline.ref_num]
+                ref_labels = self.labels[first_source][:baseline.ref_num]
+        
         results = {}
         for source_name, source_data in self.data.items():
             source_labels = self.labels[source_name]
-            source_results = baseline.evaluate(data=source_data, labels=source_labels, metrics=metrics, sr=self.sr, in_domain=in_domain, dataset_name=self.name)
+            source_results = baseline.evaluate(
+                data=source_data, 
+                labels=source_labels, 
+                metrics=metrics, 
+                sr=self.sr, 
+                in_domain=in_domain, 
+                dataset_name=expr_name or self.name,
+                ref_data=ref_data,
+                ref_labels=ref_labels
+            )
             results[source_name] = source_results
         return results
