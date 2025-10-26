@@ -1,6 +1,6 @@
 batch_size: 16
 num_epoch: 40
-lr: 1.0e-07
-wd: 1.0e-04
+lr: 1.0e-06
+wd: 1.0e-05
 
 seed: 42
