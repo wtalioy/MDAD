@@ -5,7 +5,6 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 import torch
-from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model, HubertModel, AutoProcessor
 from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
@@ -13,6 +12,7 @@ from baselines import Baseline
 from baselines.mkrt.mmd_model import MMDModel
 from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
 from config import Label
+from .safeear_extractor import SafeEarExtractor
 
 class MKRT(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
@@ -23,9 +23,12 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./hubert-large-ll60k")
-        self.model = HubertModel.from_pretrained("./hubert-large-ll60k").to(device)
-        self.model.eval()
+        self.extractor = SafeEarExtractor(
+            config_path="C:/Users/22510/SafeEar/config/train19.yaml",
+            checkpoint_path="C:/Users/22510/SafeEar/speech_tokenizer/SpeechTokenizer.pt",
+            device=device
+        )
+        self.sample_rate = self.extractor.sample_rate
 
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
@@ -146,26 +149,24 @@ class MKRT(Baseline):
         batch_size: int = 32,
     ) -> List[torch.Tensor]:
         if cache_name is not None:
-            cache_path = os.path.join(os.path.dirname(__file__), "cache", f"{cache_name}.pt")
+            cache_path = os.path.join(os.path.dirname(__file__), "cache", f"safeear_{cache_name}.pt")
             if cache_path and os.path.exists(cache_path):
                 logger.info(f"Feature cache found at {cache_path}")
                 return torch.load(cache_path)
             
         features = []
-        for i in range(0, len(audio_data), batch_size):
+        for i in tqdm(range(0, len(audio_data), batch_size), desc="Extracting features"):
             batch_audio = audio_data[i : i + batch_size]
-            input_values = self.extractor(
-                batch_audio,
-                sampling_rate=self.sample_rate,
-                padding="max_length",
-                max_length=10000,
-                truncation=True,
-                return_tensors="pt",
-            ).input_values.to(self.device, non_blocking=True)
+            
             with torch.inference_mode():
-                last_hidden = self.model(input_values).last_hidden_state.detach().cpu()
-            features.extend(torch.split(last_hidden, 1, dim=0))
-            del input_values, last_hidden, batch_audio
+                # The SafeEarExtractor expects a sample rate, but the original loop did not provide one.
+                # The evaluate function has `sr`, I'll assume the training data also has a consistent sample rate.
+                # The original `_load_features` used `self.sample_rate`. I'll do the same.
+                feature_batch = self.extractor(batch_audio, sr=16000)
+
+            features.extend(feature_batch)
+
+            del batch_audio, feature_batch
 
         if cache_name is not None:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
