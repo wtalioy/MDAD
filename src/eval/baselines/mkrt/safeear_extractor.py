@@ -1,42 +1,35 @@
 import torch
 import hydra
 from omegaconf import OmegaConf
-import torchaudio
 import numpy as np
 import os
-from .safeear_decouple.decouple import SpeechTokenizer
+from baselines.utils import download_from_url
 
 class SafeEarExtractor:
-    def __init__(self, config_path: str, checkpoint_path: str, device: str = "cuda"):
+    def __init__(self, device: str = "cuda"):
         self.device = device
-        
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"SafeEar config file not found at {config_path}")
+
+        config_path = os.path.join(os.path.dirname(__file__), "config", "extractor.yaml")
         cfg = OmegaConf.load(config_path)
         
         self.model: torch.nn.Module = hydra.utils.instantiate(cfg.decouple_model)
         
-        if not os.path.exists(checkpoint_path):
-            raise FileNotFoundError(f"SafeEar checkpoint file not found at {checkpoint_path}")
-        self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        speechtokenizer_path = download_from_url(
+            url="https://cloud.tsinghua.edu.cn/f/413a0cd2e6f749eea956/?dl=1",
+            save_dir=os.path.join(os.path.dirname(__file__), "cache"),
+            filename="SpeechTokenizer.pt"
+        )
+        self.model.load_state_dict(torch.load(speechtokenizer_path, map_location=device))
         self.model.to(device)
         self.model.eval()
         
-        self.sample_rate = self.model.sample_rate
-
     @torch.inference_mode()
-    def __call__(self, audio_batch: list[np.ndarray], sr: int) -> list[torch.Tensor]:
+    def __call__(self, audio_batch: list[np.ndarray]) -> list[torch.Tensor]:
         processed_batch = []
         for waveform_np in audio_batch:
             waveform = torch.from_numpy(waveform_np).float().to(self.device)
-            
             if waveform.ndim == 1:
                 waveform = waveform.unsqueeze(0)
-            
-            if sr != self.sample_rate:
-                resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate).to(self.device)
-                waveform = resampler(waveform)
-
             if waveform.shape[0] > 1:
                 waveform = torch.mean(waveform, dim=0, keepdim=True)
 

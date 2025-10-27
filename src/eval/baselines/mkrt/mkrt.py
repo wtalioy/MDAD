@@ -11,8 +11,8 @@ from scipy.stats import combine_pvalues
 from baselines import Baseline
 from baselines.mkrt.mmd_model import MMDModel
 from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
+from baselines.mkrt.safeear_extractor import SafeEarExtractor
 from config import Label
-from .safeear_extractor import SafeEarExtractor
 
 class MKRT(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
@@ -23,12 +23,7 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = SafeEarExtractor(
-            config_path="C:/Users/22510/SafeEar/config/train19.yaml",
-            checkpoint_path="C:/Users/22510/SafeEar/speech_tokenizer/SpeechTokenizer.pt",
-            device=device
-        )
-        self.sample_rate = self.extractor.sample_rate
+        self.extractor = SafeEarExtractor(device=device)
 
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
@@ -157,13 +152,7 @@ class MKRT(Baseline):
         features = []
         for i in tqdm(range(0, len(audio_data), batch_size), desc="Extracting features"):
             batch_audio = audio_data[i : i + batch_size]
-            
-            with torch.inference_mode():
-                # The SafeEarExtractor expects a sample rate, but the original loop did not provide one.
-                # The evaluate function has `sr`, I'll assume the training data also has a consistent sample rate.
-                # The original `_load_features` used `self.sample_rate`. I'll do the same.
-                feature_batch = self.extractor(batch_audio, sr=16000)
-
+            feature_batch = self.extractor(batch_audio)
             features.extend(feature_batch)
 
             del batch_audio, feature_batch
