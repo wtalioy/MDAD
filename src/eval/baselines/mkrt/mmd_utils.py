@@ -72,51 +72,10 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
 
 def Pdist2(x, y):
     """compute the paired distance between x and y."""
-    x_norm = (x**2).sum(1).view(-1, 1)
-    if y is not None:
-        y_norm = (y**2).sum(1).view(1, -1)
-    else:
+    if y is None:
         y = x
-        y_norm = x_norm.view(1, -1)
-    Pdist = x_norm + y_norm - 2.0 * torch.mm(x, torch.transpose(y, 0, 1))
-    Pdist[Pdist < 0] = 0
+    Pdist = torch.cdist(x, y, p=2).pow(2)
     return Pdist
-
-
-def MMD_batch2(
-    Fea,
-    len_s,
-    Fea_org,
-    sigma,
-    sigma0=0.1,
-    epsilon=10 ** (-10),
-    is_var_computed=True,
-    use_1sample_U=True,
-    coeff_xy=2,
-):
-    X = Fea[0:len_s, :]
-    Y = Fea[len_s:, :]
-    L = 1  # generalized Gaussian (if L>1)
-
-    nx = X.shape[0]
-    ny = Y.shape[0]
-    Dxx = Pdist2(X, X)
-    Dyy = torch.zeros(Fea.shape[0] - len_s, 1).to(Dxx.device)
-    # Dyy = Pdist2(Y, Y)
-    Dxy = Pdist2(X, Y).transpose(0, 1)
-    Kx = torch.exp(-Dxx / sigma0)
-    Ky = torch.exp(-Dyy / sigma0)
-    Kxy = torch.exp(-Dxy / sigma0)
-
-    nx = Kx.shape[0]
-
-    is_unbiased = False
-    xx = torch.div((torch.sum(Kx)), (nx * nx))
-    yy = Ky.reshape(-1)
-    xy = torch.div(torch.sum(Kxy, dim=1), (nx))
-
-    mmd2 = xx - 2 * xy + yy
-    return mmd2
 
 
 # MMD for three samples
@@ -129,8 +88,7 @@ def MMD_3_Sample_Test(
     fea_z_org,
     sigma,
     sigma0,
-    epsilon,
-    alpha
+    epsilon
 ):
     """Run three-sample test (TST) using deep kernel kernel."""
     X = ref_fea.clone().detach()
@@ -139,6 +97,22 @@ def MMD_3_Sample_Test(
     X_org = ref_fea_org.clone().detach()
     Y_org = fea_y_org.clone().detach()
     Z_org = fea_z_org.clone().detach()
+
+    # --------------- Start of Debugging ---------------
+    # Check for NaN/Inf in input features
+    inputs = {'X': X, 'Y': Y, 'Z': Z, 'X_org': X_org, 'Y_org': Y_org, 'Z_org': Z_org}
+    for name, tensor in inputs.items():
+        if torch.isnan(tensor).any() or torch.isinf(tensor).any():
+            logger.warning(f"Input tensor {name} contains NaN or Inf.")
+            logger.warning(f"{name} data: {tensor}")
+        
+        
+    # Check for zero variance
+    if Y.shape[0] > 1 and torch.var(Y) == 0:
+        logger.warning("Y has zero variance (all elements are the same).")
+    if Z.shape[0] > 1 and torch.var(Z) == 0:
+        logger.warning("Z has zero variance (all elements are the same).")
+    # --------------- End of Debugging -----------------
 
     Kyy = flexible_kernel(Y, Y, Y_org, Y_org, sigma, sigma0, epsilon)
     Kzz = flexible_kernel(Z, Z, Z_org, Z_org, sigma, sigma0, epsilon)
@@ -150,8 +124,6 @@ def MMD_3_Sample_Test(
 
     Diff_Var, _, _ = MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon)
 
-    # u_yy = torch.sum(Kyynd) / (Y.shape[0] * (Y.shape[0] - 1))
-    # u_zz = torch.sum(Kzznd) / (Z.shape[0] * (Z.shape[0] - 1))
     u_yy = torch.sum(Kyynd) / (Y.shape[0])
     u_zz = torch.sum(Kzznd) / (Z.shape[0])
     u_xy = torch.sum(Kxy) / (X.shape[0] * Y.shape[0])
@@ -159,27 +131,37 @@ def MMD_3_Sample_Test(
 
     t = u_yy - 2 * u_xy - (u_zz - 2 * u_xz)
 
+    # If using single sample ref, variance calculation is invalid. Return t as the score.
+    if X.shape[0] == 1:
+        score = torch.sigmoid(-t)
+        return score.item()
+
     # Check for NaN values in t
     if torch.isnan(t).any():
         logger.warning("t contains NaN values")
-        return 1, 0.0
+        logger.warning(f"t value: {t}")
+        logger.warning(f"u_yy: {u_yy}, u_zz: {u_zz}, u_xy: {u_xy}, u_xz: {u_xz}")
+        return 1
 
     # Ensure Diff_Var is positive and not too small
-    if Diff_Var.item() <= 0 or torch.isnan(Diff_Var).any():
+    if Diff_Var.item() <= 1e-8 or torch.isnan(Diff_Var).any():
+        logger.warning(f"Diff_Var is too small, zero, negative or NaN. Diff_Var: {Diff_Var.item()}")
         Diff_Var = torch.max(torch.tensor(epsilon), torch.tensor(1e-08))
 
     # Compute the test statistic safely
     sqrt_diff_var = torch.sqrt(Diff_Var)
     if sqrt_diff_var == 0 or torch.isnan(sqrt_diff_var):
         logger.warning("sqrt(Diff_Var) is zero or NaN")
-        return 1, 0.0
+        logger.warning(f"Diff_Var: {Diff_Var.item()}, sqrt_diff_var: {sqrt_diff_var}")
+        return 1
 
     test_stat = -t / sqrt_diff_var
 
     # Check if test_stat is NaN or inf
     if torch.isnan(test_stat).any() or torch.isinf(test_stat).any():
         logger.warning("Test statistic is NaN or inf")
-        return 1, 0.0
+        logger.warning(f"test_stat: {test_stat}, t: {t}, sqrt_diff_var: {sqrt_diff_var}")
+        return 1
 
     p_value = torch.distributions.Normal(0, 1).cdf(test_stat).item()
 

@@ -4,14 +4,15 @@ import librosa
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
+from tqdm.contrib import tzip
 import torch
+from transformers import Wav2Vec2FeatureExtractor, HubertModel
 from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
 from baselines import Baseline
 from baselines.mkrt.mmd_model import MMDModel
 from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
-from baselines.mkrt.safeear_extractor import SafeEarExtractor
 from config import Label
 
 class MKRT(Baseline):
@@ -23,7 +24,9 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = SafeEarExtractor(device=device)
+        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./hubert-large-ll60k")
+        self.model = HubertModel.from_pretrained("./hubert-large-ll60k").to(device)
+        self.model.eval()
 
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
@@ -127,7 +130,7 @@ class MKRT(Baseline):
             self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
             if epoch % 4 == 0:
                 self._precompute_ref_cache(ref_real, ref_fake)
-                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, ref_real=ref_real, ref_fake=ref_fake, sr=sr)
+                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, sr=sr)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
                     best_eer = eer
@@ -144,18 +147,26 @@ class MKRT(Baseline):
         batch_size: int = 32,
     ) -> List[torch.Tensor]:
         if cache_name is not None:
-            cache_path = os.path.join(os.path.dirname(__file__), "cache", f"safeear_{cache_name}.pt")
+            cache_path = os.path.join(os.path.dirname(__file__), "cache", f"{cache_name}.pt")
             if cache_path and os.path.exists(cache_path):
                 logger.info(f"Feature cache found at {cache_path}")
                 return torch.load(cache_path)
             
         features = []
-        for i in tqdm(range(0, len(audio_data), batch_size), desc="Extracting features"):
+        for i in range(0, len(audio_data), batch_size):
             batch_audio = audio_data[i : i + batch_size]
-            feature_batch = self.extractor(batch_audio)
-            features.extend(feature_batch)
-
-            del batch_audio, feature_batch
+            input_values = self.extractor(
+                batch_audio,
+                sampling_rate=self.sample_rate,
+                padding="max_length",
+                max_length=10000,
+                truncation=True,
+                return_tensors="pt",
+            ).input_values.to(self.device, non_blocking=True)
+            with torch.inference_mode():
+                last_hidden = self.model(input_values).last_hidden_state.detach().cpu()
+            features.extend(torch.split(last_hidden, 1, dim=0))
+            del input_values, last_hidden, batch_audio
 
         if cache_name is not None:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
@@ -218,14 +229,13 @@ class MKRT(Baseline):
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
             if not os.path.exists(default_ckpt):
                 logger.info(f"Default model not found at {default_ckpt}, training from scratch")
-                train_real_data, train_fake_data = self._load_default(split="train", limit=2048+self.ref_num)
+                train_real_data, train_fake_data = self._load_default(split="train", limit=8192+self.ref_num)
                 train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
                 eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=768))
                 self.train(train_data, train_labels, eval_data, eval_labels, dataset_name="default", ref_data=ref_data, ref_labels=ref_labels, sr=sr)
         else:
-            # default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
-            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"default_best.pt")
+            default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
 
         # cached during training
         if ref_data is None or ref_labels is None:
@@ -245,87 +255,82 @@ class MKRT(Baseline):
             if metric not in self.supported_metrics:
                 raise ValueError(f"Unsupported metric: {metric}")
             func = getattr(self, f"_evaluate_{metric}")
-            metric_rst = func(data, labels, ref_real, ref_fake, sr=sr)
+            metric_rst = func(data, labels, sr=sr)
             results[metric] = metric_rst
 
         return results
 
     @torch.inference_mode()
-    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int) -> float:
+    def _evaluate_eer(self, data: List[np.ndarray], labels: np.ndarray, sr: int) -> float:
+        logger.info("Evaluating EER")
         self.net.basemodel.eval()
+
         if sr != self.sample_rate:
             data = [librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate) for audio in data]
+
         fea_data = self._load_features(data)
-        scores = []
-        for fea_test in tqdm(fea_data, desc="Evaluating EER"):
-            score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
-            if np.isnan(score):
-                logger.warning("NaN score encountered")
-                score = 1.0
-            scores.append(score)
+        scores = self._three_sample_test(fea_data, round=8)
         scores = np.array(scores)
         eer, _ = self._compute_eer(scores, labels)
         
         return float(eer)
 
     @torch.inference_mode()
-    def _evaluate_auroc(self, data: List[np.ndarray], labels: np.ndarray, ref_real: torch.Tensor, ref_fake: torch.Tensor, sr: int) -> float:
+    def _evaluate_auroc(self, data: List[np.ndarray], labels: np.ndarray, sr: int) -> float:
+        logger.info("Evaluating AUROC")
         self.net.basemodel.eval()
         if sr != self.sample_rate:
             data = [librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate) for audio in data]
+        
         fea_data = self._load_features(data)
-        scores = []
-        for fea_test in tqdm(fea_data, desc="Evaluating AUROC"):
-            score, _ = self._three_sample_test(fea_test, ref_real, ref_fake, round=8)
-            scores.append(score)
+        scores = self._three_sample_test(fea_data, round=8)
         scores = np.array(scores)
+        
         return float(roc_auc_score(labels, scores))
 
     def _three_sample_test(
         self,
-        fea_test: torch.Tensor,
-        fea_real: torch.Tensor,
-        fea_fake: torch.Tensor,
+        fea_tests: List[torch.Tensor],
         round: int = 1,
-        alpha: float = 0.498
-    ) -> Tuple[float, List[float]]:
-        fea_test = fea_test.to(self.device)
-        net_test = self.net(fea_test)
-        fea_real = self._ref_cache["fea_real"]
-        net_real = self._ref_cache["net_real"]
-        fea_fake = self._ref_cache["fea_fake"]
-        net_fake = self._ref_cache["net_fake"]
+    ) -> List[float]:
+        scores = []
+        fea_tests = torch.cat(fea_tests, dim=0).to(self.device)
+        net_tests = self.net(fea_tests)
 
-        idx_real = torch.randperm(len(fea_real))
-        idx_fake = torch.randperm(len(fea_fake))
-        fea_real = fea_real[idx_real]
-        fea_fake = fea_fake[idx_fake]
-        net_real = net_real[idx_real]
-        net_fake = net_fake[idx_fake]
+        for fea_test, net_test in tzip(fea_tests, net_tests, desc="Running three sample test"):
+            fea_real = self._ref_cache["fea_real"]
+            net_real = self._ref_cache["net_real"]
+            fea_fake = self._ref_cache["fea_fake"]
+            net_fake = self._ref_cache["net_fake"]
 
-        p_value_list = []
+            idx_real = torch.randperm(len(fea_real))
+            idx_fake = torch.randperm(len(fea_fake))
+            fea_real = fea_real[idx_real]
+            fea_fake = fea_fake[idx_fake]
+            net_real = net_real[idx_real]
+            net_fake = net_fake[idx_fake]
+            fea_test = fea_test.unsqueeze(0)
+            net_test = net_test.unsqueeze(0)
 
-        for i in range(max(round, 1)):
-            p_value = MMD_3_Sample_Test(
-                net_test,
-                net_real[[i]],
-                net_fake[[i]],
-                fea_test.view(fea_test.shape[0], -1),
-                fea_real[[i]].view(fea_real[[i]].shape[0], -1),
-                fea_fake[[i]].view(fea_fake[[i]].shape[0], -1),
-                self.net.sigma,
-                self.net.sigma0_u,
-                self.net.ep,
-                alpha
-            )
-        
-            p_value_list.append(p_value)
+            p_value_list = []
+            for i in range(max(round, 1)):
+                p_value = MMD_3_Sample_Test(
+                    net_test,
+                    net_real[[i]],
+                    net_fake[[i]],
+                    fea_test.reshape(fea_test.shape[0], -1),
+                    fea_real[[i]].reshape(fea_real[[i]].shape[0], -1),
+                    fea_fake[[i]].reshape(fea_fake[[i]].shape[0], -1),
+                    self.net.sigma,
+                    self.net.sigma0_u,
+                    self.net.ep,
+                )
+                p_value_list.append(p_value)
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None            
+            _, p_value = combine_pvalues(p_value_list, method='stouffer')
+            scores.append(p_value)
 
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        
-        _, p_value = combine_pvalues(p_value_list, method='stouffer')
-        
-        return p_value, p_value_list
+        return scores
 
     def _compute_eer(self, scores: np.ndarray, labels: np.ndarray) -> Tuple[Any, Any]:
         fpr, tpr, thresholds = roc_curve(labels, scores)
