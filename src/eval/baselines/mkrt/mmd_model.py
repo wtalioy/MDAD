@@ -162,9 +162,9 @@ class MMDBaseModel(nn.Module):
 
 class MMDModel:
     def __init__(self, config: dict, device: str):
-        self.sigma = torch.tensor(config.get("sigma", 30.0) ** 2).to(device, dtype=torch.float)
-        self.sigma0_u = torch.tensor(config.get("sigma0_u", 45.0) ** 2).to(device, dtype=torch.float)
-        self.ep = torch.tensor(config.get("ep", 10.0) ** 2).to(device, dtype=torch.float)
+        self.sigma = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
+        self.sigma0_u = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
+        self.ep = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
         self.coeff_xy = config.get("coeff_xy", 2)
         self.is_yy_zero = config.get("is_yy_zero", False)
         self.is_xx_zero = config.get("is_xx_zero", False)
@@ -187,9 +187,10 @@ class MMDModel:
                 new_state_dict[key] = value
         state_dict = new_state_dict
             
-        self.sigma = torch.tensor(checkpoint["sigma"]).to(self.device, dtype=torch.float)
-        self.sigma0_u = torch.tensor(checkpoint["sigma0_u"]).to(self.device, dtype=torch.float)
-        self.ep = torch.tensor(checkpoint["ep"]).to(self.device, dtype=torch.float)
+        with torch.no_grad():
+            self.sigma.data.fill_(checkpoint["sigma"])
+            self.sigma0_u.data.fill_(checkpoint["sigma0_u"])
+            self.ep.data.fill_(checkpoint["ep"])
         
         self.basemodel.load_state_dict(state_dict)
 
@@ -197,9 +198,9 @@ class MMDModel:
         """Save the model state dictionary."""
         torch.save({
             "net": self.basemodel.state_dict(),
-            "sigma": self.sigma.item(),
-            "sigma0_u": self.sigma0_u.item(),
-            "ep": self.ep.item()
+            "sigma": self.sigma.detach().item(),
+            "sigma0_u": self.sigma0_u.detach().item(),
+            "ep": self.ep.detach().item()
         }, ckpt_path)
 
         

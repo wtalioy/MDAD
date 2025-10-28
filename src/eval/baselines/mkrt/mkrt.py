@@ -2,14 +2,16 @@ from typing import Any, List, Tuple, Optional
 import os
 import librosa
 import numpy as np
-from loguru import logger
-from tqdm import tqdm
-from tqdm.contrib import tzip
+import math
 import torch
-from transformers import Wav2Vec2FeatureExtractor, HubertModel
+from tqdm import tqdm
+from loguru import logger
+from torch.utils.data import DataLoader, TensorDataset
+from transformers import Wav2Vec2FeatureExtractor, HubertModel, get_cosine_schedule_with_warmup
 from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
+
 from baselines import Baseline
 from baselines.mkrt.mmd_model import MMDModel
 from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
@@ -40,31 +42,44 @@ class MKRT(Baseline):
             lr=args['lr'],
             weight_decay=args['wd']
         )
+        
+        total_steps = args['num_epoch'] * args['steps_per_epoch']
+        warmup_steps = max(1, int(0.01 * total_steps))
+
+        self.scheduler = get_cosine_schedule_with_warmup(
+            self.optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
+        )
 
         torch.manual_seed(args['seed'])
         torch.cuda.manual_seed(args['seed'])
 
     def _split_features(self, fea: torch.Tensor, labels: List[Label]) -> Tuple[torch.Tensor, torch.Tensor]:
-        fea_real = np.array(fea)[np.array(labels) == Label.real]
-        fea_fake = np.array(fea)[np.array(labels) == Label.fake]
-        fea_real = torch.from_numpy(fea_real).squeeze(1).to(self.device)
-        fea_fake = torch.from_numpy(fea_fake).squeeze(1).to(self.device)
+        labels_np = np.array(labels)
+        mask_real = labels_np == Label.real
+        mask_fake = ~mask_real
+        fea_real = fea[mask_real]
+        fea_fake = fea[mask_fake]
         return fea_real, fea_fake
 
     def _train_epoch(self, epoch: int, fea_real: torch.Tensor, fea_fake: torch.Tensor, batch_size: int):
         self.net.basemodel.train()
 
-        min_len = min(len(fea_real), len(fea_fake))
+        min_len = min(fea_real.size(0), fea_fake.size(0))
         fea_real = fea_real[:min_len]
         fea_fake = fea_fake[:min_len]
 
-        batch_size = min(batch_size, len(fea_fake))
-        
-        with tqdm(total = len(fea_real) // batch_size + 1, desc="Training") as pbar:
-            for start_idx in range(0, len(fea_real), batch_size):
-                end_idx = min(start_idx + batch_size, len(fea_real))
-                fea_real_sample = fea_real[start_idx:end_idx].to(self.device, non_blocking=True)
-                fea_fake_sample = fea_fake[start_idx:end_idx].to(self.device, non_blocking=True)
+        dataset = TensorDataset(fea_real, fea_fake)
+        loader = DataLoader(
+            dataset,
+            batch_size=min(batch_size, min_len),
+            shuffle=False,
+            drop_last=False,
+        )
+
+        with tqdm(total=len(loader), desc="Training") as pbar:
+            for fea_real_sample, fea_fake_sample in loader:
                 inputs = torch.cat([fea_real_sample, fea_fake_sample], dim=0)
                 outputs = self.net(inputs)
 
@@ -86,8 +101,12 @@ class MKRT(Baseline):
                     mmd_std_temp = torch.sqrt(torch.tensor(10 ** (-8), device=mmd_value_temp.device))
 
                 loss = torch.div(mmd_value_temp, mmd_std_temp)
+                self.optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.net.basemodel.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_([self.net.sigma, self.net.sigma0_u, self.net.ep], max_norm=1.0)
                 self.optimizer.step()
+                self.scheduler.step()
                 pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
                 pbar.update(1)
 
@@ -102,9 +121,8 @@ class MKRT(Baseline):
         ref_labels: Optional[List[Label]] = None,
         sr: int = 16000,
     ):
-        # Validate ref_data and ref_labels for MKRT
         if ref_data is None or ref_labels is None:
-            raise ValueError("MKRT requires ref_data and ref_labels to be provided")
+            raise ValueError(f"{self.name} requires ref_data and ref_labels to be provided")
         
         # cache ref_data & ref_labels
         self.ref_data = ref_data
@@ -113,8 +131,15 @@ class MKRT(Baseline):
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_fea = self._load_features(train_data, cache_name=f"train_{dataset_name}")
         train_real, train_fake = self._split_features(train_fea, train_labels)
+
+        effective_len = min(train_real.size(0), train_fake.size(0))
+        args['steps_per_epoch'] = math.ceil(effective_len / args['batch_size'])
+
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
+
+        self._auto_tune_bandwidths(ref_real, ref_fake)
+
         eval_labels = np.array(eval_labels)
 
         log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
@@ -122,13 +147,13 @@ class MKRT(Baseline):
         
         self._init_train(args)
         
-        best_eer = 100
+        best_eer = 1.0
         best_epoch = 0
         save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         for epoch in range(args['num_epoch']):
             self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
-            if epoch % 4 == 0:
+            if epoch % args['eval_interval'] == 0 and epoch > 0:
                 self._precompute_ref_cache(ref_real, ref_fake)
                 eer = self._evaluate_eer(data=eval_data, labels=eval_labels, sr=sr)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
@@ -145,14 +170,15 @@ class MKRT(Baseline):
         audio_data: List[np.ndarray],
         cache_name: Optional[str] = None,
         batch_size: int = 32,
-    ) -> List[torch.Tensor]:
+    ) -> torch.Tensor:
         if cache_name is not None:
             cache_path = os.path.join(os.path.dirname(__file__), "cache", f"{cache_name}.pt")
             if cache_path and os.path.exists(cache_path):
                 logger.info(f"Feature cache found at {cache_path}")
-                return torch.load(cache_path)
+                cached = torch.load(cache_path, map_location=self.device)
+                return cached.to(self.device, non_blocking=True)
             
-        features = []
+        chunks = []
         for i in range(0, len(audio_data), batch_size):
             batch_audio = audio_data[i : i + batch_size]
             input_values = self.extractor(
@@ -164,13 +190,15 @@ class MKRT(Baseline):
                 return_tensors="pt",
             ).input_values.to(self.device, non_blocking=True)
             with torch.inference_mode():
-                last_hidden = self.model(input_values).last_hidden_state.detach().cpu()
-            features.extend(torch.split(last_hidden, 1, dim=0))
+                last_hidden = self.model(input_values).last_hidden_state.detach()
+            chunks.append(last_hidden)  # [B, T, H]
             del input_values, last_hidden, batch_audio
+
+        features = torch.cat(chunks, dim=0)  # [N, T, H]
 
         if cache_name is not None:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            torch.save(features, cache_path)
+            torch.save(features.cpu(), cache_path)
             logger.info(f"Feature cache saved to {cache_path}")
             
         return features
@@ -290,45 +318,49 @@ class MKRT(Baseline):
 
     def _three_sample_test(
         self,
-        fea_tests: List[torch.Tensor],
+        fea_tests: torch.Tensor,
         round: int = 1,
+        batch_size: int = 64
     ) -> List[float]:
         scores = []
-        fea_tests = torch.cat(fea_tests, dim=0).to(self.device)
-        net_tests = self.net(fea_tests)
+        for i in tqdm(range(0, fea_tests.size(0), batch_size), desc="Running three sample test"):
+            fea_tests_batch = fea_tests[i:i+batch_size]
+            net_tests_batch = self.net(fea_tests_batch)
+            
+            for fea_test, net_test in zip(fea_tests_batch, net_tests_batch):
+                fea_real = self._ref_cache["fea_real"]
+                net_real = self._ref_cache["net_real"]
+                fea_fake = self._ref_cache["fea_fake"]
+                net_fake = self._ref_cache["net_fake"]
 
-        for fea_test, net_test in tzip(fea_tests, net_tests, desc="Running three sample test"):
-            fea_real = self._ref_cache["fea_real"]
-            net_real = self._ref_cache["net_real"]
-            fea_fake = self._ref_cache["fea_fake"]
-            net_fake = self._ref_cache["net_fake"]
+                idx_real = torch.randperm(len(fea_real))
+                idx_fake = torch.randperm(len(fea_fake))
+                fea_real = fea_real[idx_real]
+                fea_fake = fea_fake[idx_fake]
+                net_real = net_real[idx_real]
+                net_fake = net_fake[idx_fake]
+                fea_test = fea_test.unsqueeze(0)
+                net_test = net_test.unsqueeze(0)
 
-            idx_real = torch.randperm(len(fea_real))
-            idx_fake = torch.randperm(len(fea_fake))
-            fea_real = fea_real[idx_real]
-            fea_fake = fea_fake[idx_fake]
-            net_real = net_real[idx_real]
-            net_fake = net_fake[idx_fake]
-            fea_test = fea_test.unsqueeze(0)
-            net_test = net_test.unsqueeze(0)
-
-            p_value_list = []
-            for i in range(max(round, 1)):
-                p_value = MMD_3_Sample_Test(
-                    net_test,
-                    net_real[[i]],
-                    net_fake[[i]],
-                    fea_test.reshape(fea_test.shape[0], -1),
-                    fea_real[[i]].reshape(fea_real[[i]].shape[0], -1),
-                    fea_fake[[i]].reshape(fea_fake[[i]].shape[0], -1),
-                    self.net.sigma,
-                    self.net.sigma0_u,
-                    self.net.ep,
-                )
-                p_value_list.append(p_value)
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None            
-            _, p_value = combine_pvalues(p_value_list, method='stouffer')
-            scores.append(p_value)
+                p_value_list = []
+                for j in range(max(round, 1)):
+                    p_value = MMD_3_Sample_Test(
+                        net_test,
+                        net_real[[j]],
+                        net_fake[[j]],
+                        fea_test.reshape(fea_test.shape[0], -1),
+                        fea_real[[j]].reshape(fea_real[[j]].shape[0], -1),
+                        fea_fake[[j]].reshape(fea_fake[[j]].shape[0], -1),
+                        self.net.sigma,
+                        self.net.sigma0_u,
+                        self.net.ep,
+                    )
+                    p_value_list.append(p_value)        
+                _, p_value = combine_pvalues(p_value_list, method='stouffer')
+                if np.isnan(p_value):
+                    logger.warning("NaN score encountered")
+                    p_value = 1.0
+                scores.append(float(p_value))
 
         return scores
 
@@ -340,3 +372,42 @@ class MKRT(Baseline):
         eer = (fpr[np.nanargmin(np.abs(fnr - fpr))] + fnr[np.nanargmin(np.abs(fnr - fpr))]) / 2
 
         return eer, eer_threshold
+
+    def _auto_tune_bandwidths(self, fea_real: torch.Tensor, fea_fake: torch.Tensor, sample_size: int = 512):
+        """Estimate reasonable initial values for sigma (original space) and sigma0_u (hidden space).
+
+        The method samples up to ``sample_size`` utterances from the reference real & fake pools,
+        computes pair-wise squared Euclidean distances in both the original feature space and the
+        network hidden space, and sets ``self.net.sigma`` to the median original-space distance and
+        ``self.net.sigma0_u`` to the median hidden-space distance.
+        """
+        with torch.inference_mode():
+            # Concatenate and sample
+            ref_fea = torch.cat([fea_real, fea_fake], dim=0)
+            total = ref_fea.size(0)
+            if total > sample_size:
+                idx = torch.randperm(total, device=ref_fea.device)[:sample_size]
+                ref_fea = ref_fea[idx]
+
+            # Original-space distances
+            ref_fea_flat = ref_fea.view(ref_fea.size(0), -1)
+            D_org = torch.cdist(ref_fea_flat, ref_fea_flat, p=2).pow(2)
+            sigma_org = torch.median(D_org)  # 0.5 quantile
+
+            # Hidden-space distances (one forward pass)
+            hidden = self.net(ref_fea)
+            D_hid = torch.cdist(hidden, hidden, p=2).pow(2)
+            sigma_hid = torch.quantile(D_hid, 0.9)
+
+            eps = 1e-6
+            sigma_org = torch.clamp(sigma_org, min=eps)
+            sigma_hid = torch.clamp(sigma_hid, min=eps)
+
+            with torch.no_grad():
+                self.net.sigma.data.fill_(sigma_org.item())
+                self.net.sigma0_u.data.fill_(sigma_hid.item())
+
+            logger.info(
+                f"Auto-tuned sigma={sigma_org.item():.3f}, "
+                f"sigma0_u={sigma_hid.item():.3f}"
+            )

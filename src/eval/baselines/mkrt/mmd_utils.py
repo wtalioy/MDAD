@@ -20,24 +20,25 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
     n = Kyy.shape[0]
     r = Kzz.shape[0]
 
-    # Remove diagonal elements
-    Kyynd = Kyy - torch.diag(torch.diag(Kyy))
-    Kzznd = Kzz - torch.diag(torch.diag(Kzz))
+    Kyy.fill_diagonal_(0.0)
+    Kzz.fill_diagonal_(0.0)
+    Kyynd, Kzznd = Kyy, Kzz
 
     u_yy = torch.sum(Kyynd) * (1.0 / n)
     u_zz = torch.sum(Kzznd) * (1.0 / r)
     u_xy = torch.sum(Kxy) / (m * n)
     u_xz = torch.sum(Kxz) / (m * r)
 
-    t1 = (1.0 / n**3) * torch.sum(Kyynd.T @ Kyynd) - u_yy**2
-    t2 = (1.0 / (n**2 * m)) * torch.sum(Kxy.T @ Kxy) - u_xy**2
-    t3 = (1.0 / (n * m**2)) * torch.sum(Kxy @ Kxy.T) - u_xy**2
-    t4 = (1.0 / r**3) * torch.sum(Kzznd.T @ Kzznd) - u_zz**2
-    t5 = (1.0 / (r * m**2)) * torch.sum(Kxz @ Kxz.T) - u_xz**2
-    t6 = (1.0 / (r**2 * m)) * torch.sum(Kxz.T @ Kxz) - u_xz**2
-    t7 = (1.0 / (n**2 * m)) * torch.sum(Kyynd @ Kxy.T) - u_yy * u_xy
-    t8 = (1.0 / (n * m * r)) * torch.sum(Kxy.T @ Kxz) - u_xz * u_xy
-    t9 = (1.0 / (r**2 * m)) * torch.sum(Kzznd @ Kxz.T) - u_zz * u_xz
+    # use einsum reductions to avoid explicit matrix products
+    t1 = (1.0 / n**3) * torch.einsum('ij,ij->', Kyynd, Kyynd) - u_yy**2
+    t2 = (1.0 / (n**2 * m)) * torch.einsum('ij,ij->', Kxy, Kxy) - u_xy**2
+    t3 = (1.0 / (n * m**2)) * torch.einsum('ij,ij->', Kxy, Kxy) - u_xy**2  # symmetric reuse
+    t4 = (1.0 / r**3) * torch.einsum('ij,ij->', Kzznd, Kzznd) - u_zz**2
+    t5 = (1.0 / (r * m**2)) * torch.einsum('ij,ij->', Kxz, Kxz) - u_xz**2
+    t6 = (1.0 / (r**2 * m)) * torch.einsum('ij,ij->', Kxz, Kxz) - u_xz**2
+    t7 = (1.0 / (n**2 * m)) * torch.einsum('ij,ij->', Kyynd, Kxy) - u_yy * u_xy
+    t8 = (1.0 / (n * m * r)) * torch.einsum('ij,ij->', Kxy, Kxz) - u_xz * u_xy
+    t9 = (1.0 / (r**2 * m)) * torch.einsum('ij,ij->', Kzznd, Kxz) - u_zz * u_xz
 
     if type(epsilon) == torch.Tensor:
         epsilon_tensor = epsilon.clone().detach()
@@ -91,48 +92,26 @@ def MMD_3_Sample_Test(
     epsilon
 ):
     """Run three-sample test (TST) using deep kernel kernel."""
-    X = ref_fea.clone().detach()
-    Y = fea_y.clone().detach()
-    Z = fea_z.clone().detach()
-    X_org = ref_fea_org.clone().detach()
-    Y_org = fea_y_org.clone().detach()
-    Z_org = fea_z_org.clone().detach()
+    # Direct references – inputs are already detached when entering this function
+    Kyy = flexible_kernel(fea_y, fea_y, fea_y_org, fea_y_org, sigma, sigma0, epsilon)
+    Kzz = flexible_kernel(fea_z, fea_z, fea_z_org, fea_z_org, sigma, sigma0, epsilon)
+    Kxy = flexible_kernel(ref_fea, fea_y, ref_fea_org, fea_y_org, sigma, sigma0, epsilon)
+    Kxz = flexible_kernel(ref_fea, fea_z, ref_fea_org, fea_z_org, sigma, sigma0, epsilon)
 
-    # --------------- Start of Debugging ---------------
-    # Check for NaN/Inf in input features
-    inputs = {'X': X, 'Y': Y, 'Z': Z, 'X_org': X_org, 'Y_org': Y_org, 'Z_org': Z_org}
-    for name, tensor in inputs.items():
-        if torch.isnan(tensor).any() or torch.isinf(tensor).any():
-            logger.warning(f"Input tensor {name} contains NaN or Inf.")
-            logger.warning(f"{name} data: {tensor}")
-        
-        
-    # Check for zero variance
-    if Y.shape[0] > 1 and torch.var(Y) == 0:
-        logger.warning("Y has zero variance (all elements are the same).")
-    if Z.shape[0] > 1 and torch.var(Z) == 0:
-        logger.warning("Z has zero variance (all elements are the same).")
-    # --------------- End of Debugging -----------------
-
-    Kyy = flexible_kernel(Y, Y, Y_org, Y_org, sigma, sigma0, epsilon)
-    Kzz = flexible_kernel(Z, Z, Z_org, Z_org, sigma, sigma0, epsilon)
-    Kxy = flexible_kernel(X, Y, X_org, Y_org, sigma, sigma0, epsilon)
-    Kxz = flexible_kernel(X, Z, X_org, Z_org, sigma, sigma0, epsilon)
-
-    Kyynd = Kyy - torch.diag(torch.diag(Kyy))
-    Kzznd = Kzz - torch.diag(torch.diag(Kzz))
+    Kyy.fill_diagonal_(0.0)
+    Kzz.fill_diagonal_(0.0)
 
     Diff_Var, _, _ = MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon)
 
-    u_yy = torch.sum(Kyynd) / (Y.shape[0])
-    u_zz = torch.sum(Kzznd) / (Z.shape[0])
-    u_xy = torch.sum(Kxy) / (X.shape[0] * Y.shape[0])
-    u_xz = torch.sum(Kxz) / (X.shape[0] * Z.shape[0])
+    u_yy = torch.sum(Kyy) / (fea_y.shape[0])
+    u_zz = torch.sum(Kzz) / (fea_z.shape[0])
+    u_xy = torch.sum(Kxy) / (ref_fea.shape[0] * fea_y.shape[0])
+    u_xz = torch.sum(Kxz) / (ref_fea.shape[0] * fea_z.shape[0])
 
     t = u_yy - 2 * u_xy - (u_zz - 2 * u_xz)
 
     # If using single sample ref, variance calculation is invalid. Return t as the score.
-    if X.shape[0] == 1:
+    if ref_fea.shape[0] == 1:
         score = torch.sigmoid(-t)
         return score.item()
 
@@ -249,28 +228,38 @@ def MMDu(
 
     nx = X.shape[0]
     ny = Y.shape[0]
-    Dxx = Pdist2(X, X)
-    Dyy = Pdist2(Y, Y)
-    Dxy = Pdist2(X, Y)
-    Dxx_org = Pdist2(X_org, X_org)
-    Dyy_org = Pdist2(Y_org, Y_org)
-    Dxy_org = Pdist2(X_org, Y_org)
-    K_Ix = torch.eye(nx).cuda()
-    K_Iy = torch.eye(ny).cuda()
-    if is_smooth:
-        Kx = (1 - epsilon) * torch.exp(
-            -((Dxx / sigma0) ** L) - Dxx_org / sigma
-        ) + epsilon * torch.exp(-Dxx_org / sigma)
-        Ky = (1 - epsilon) * torch.exp(
-            -((Dyy / sigma0) ** L) - Dyy_org / sigma
-        ) + epsilon * torch.exp(-Dyy_org / sigma)
-        Kxy = (1 - epsilon) * torch.exp(
-            -((Dxy / sigma0) ** L) - Dxy_org / sigma
-        ) + epsilon * torch.exp(-Dxy_org / sigma)
-    else:
-        Kx = torch.exp(-Dxx / sigma0)
-        Ky = torch.exp(-Dyy / sigma0)
-        Kxy = torch.exp(-Dxy / sigma0)
+
+    # 1) compute pairwise squared distances once for merged tensors
+    merged = torch.cat([X, Y], dim=0)
+    merged_org = torch.cat([X_org, Y_org], dim=0)
+
+    with torch.amp.autocast("cuda", enabled=merged.is_cuda):
+        D_all = Pdist2(merged, merged)           # (N,N)
+        D_all_org = Pdist2(merged_org, merged_org)
+
+        Dxx = D_all[:nx, :nx]
+        Dyy = D_all[nx:, nx:]
+        Dxy = D_all[:nx, nx:]
+
+        Dxx_org = D_all_org[:nx, :nx]
+        Dyy_org = D_all_org[nx:, nx:]
+        Dxy_org = D_all_org[:nx, nx:]
+
+        # 2) fused kernel helper
+        inv_sigma = 1.0 / sigma
+        inv_sigma0 = 1.0 / sigma0
+        one_minus_ep = 1.0 - epsilon
+
+        def _kernel(dist_hidden, dist_org):
+            if is_smooth:
+                return one_minus_ep * torch.exp(-((dist_hidden * inv_sigma0) ** L) - dist_org * inv_sigma) \
+                       + epsilon * torch.exp(-dist_org * inv_sigma)
+            else:
+                return torch.exp(-dist_hidden * inv_sigma0)
+
+        Kx = _kernel(Dxx, Dxx_org)
+        Ky = _kernel(Dyy, Dyy_org)
+        Kxy = _kernel(Dxy, Dxy_org)
 
     return h1_mean_var_gram(
         Kx,

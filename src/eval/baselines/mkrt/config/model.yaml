@@ -8,7 +8,4 @@ in_dim: 1024
 token_num: 31
 hid_dim: 768
 out_dim: 300
-epsilon: 10
-sigma: 125.0
-sigma0: 300.0
 dropout: 0.2
