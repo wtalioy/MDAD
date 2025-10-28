@@ -1,0 +1,7 @@
+batch_size: 16
+num_epoch: 40
+lr: 1.0e-04
+wd: 1.0e-05
+eval_interval: 2
+
+seed: 42

@@ -1,6 +1,6 @@
 from .base import Baseline
 from .aasist.aasist import AASIST, AASIST_L
-from .ardetect.ardetect import ARDetect
+from .mkrt.mkrt import MKRT
 from .TSSDNet.tssdnet import Res_TSSDNet, Inc_TSSDNet
 from .RawNet2.rawnet2 import RawNet2
 from .RawGAT_ST.rawgat_st import RawGAT_ST
@@ -8,7 +8,7 @@ from .RawGAT_ST.rawgat_st import RawGAT_ST
 BASELINE_MAP = {
     "aasist": AASIST,
     "aasist-l": AASIST_L,
-    "ardetect": ARDetect,
+    "mkrt": MKRT,
     "res-tssdnet": Res_TSSDNet,
     "inc-tssdnet": Inc_TSSDNet,
     "rawnet2": RawNet2,

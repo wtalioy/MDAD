@@ -8,31 +8,32 @@ from loguru import logger
 import numpy as np
 from tqdm import tqdm
 from typing import List
-from models import BaseTTS, BaseVC
-from transcription.parakeet import Parakeet
+from ..models import BaseTTS, BaseVC
+from ..transcription.parakeet import Parakeet
 
 class PartialFake(BaseRawDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
-        super().__init__(data_dir or "data/PartialFake", *args, **kwargs)
-        self.data_sources = ["data/Interview", "data/Podcast", "data/PublicSpeech"]
+        super().__init__(os.path.join(data_dir or "data", "PartialFake"), *args, **kwargs)
+        self.data_sources = ["Interview", "Podcast", "PublicSpeech"]
         self.sample_rate = 16000
         self.ratio = 0.3
+        if not os.path.exists(self.meta_path):
+            meta_data = self._create_meta(base_dir=data_dir)
 
-    def _create_meta(self) -> dict:
+    def _create_meta(self, base_dir) -> dict:
         os.makedirs(self.data_dir, exist_ok=True)
         model = Parakeet()
         meta_data = {}
-        for data_dir in self.data_sources:
-            with open(os.path.join(data_dir, "meta_test.json"), "r") as f:
+        for data_source in self.data_sources:
+            with open(os.path.join(base_dir, data_source, "meta_test.json"), "r") as f:
                 domain_meta_data = json.load(f)
 
             random.shuffle(domain_meta_data)
             domain_meta_data = domain_meta_data[:int(len(domain_meta_data) * self.ratio)]
-            source_name = data_dir.split("/")[-1]
 
-            for i in tqdm(range(0, len(domain_meta_data), 32), desc=f"Processing {source_name} source"):
+            for i in tqdm(range(0, len(domain_meta_data), 32), desc=f"Processing {data_source} source"):
                 batch = domain_meta_data[i:i+32]
-                audio_paths = [os.path.join("data", source_name, item["audio"]["real"]) for item in batch]
+                audio_paths = [os.path.join("data", data_source, item["audio"]["real"]) for item in batch]
                 word_timestamps = model.get_word_timestamps(audio_paths)
                 for j, item in enumerate(batch):
                     for key in list(item.keys()):
@@ -41,7 +42,7 @@ class PartialFake(BaseRawDataset):
                     item["word_timestamps"] = word_timestamps[j]
                     item["audio"]["fake"] = {}
             
-            meta_data[source_name] = domain_meta_data
+            meta_data[data_source] = domain_meta_data
 
         with open(os.path.join(self.data_dir, "meta.json"), "w") as f:
             json.dump(meta_data, f, indent=2, ensure_ascii=False)
@@ -127,11 +128,8 @@ class PartialFake(BaseRawDataset):
             return False
 
     def generate(self, tts_models: List[BaseTTS], vc_models: List[BaseVC] = [], language: str = "en", *args, **kwargs):
-        if not os.path.exists(self.meta_path):
-            meta_data = self._create_meta()
-        else:
-            with open(self.meta_path, 'r', encoding='utf-8') as f:
-                meta_data = json.load(f)
+        with open(self.meta_path, 'r', encoding='utf-8') as f:
+            meta_data = json.load(f)
 
         # Create all possible model combinations
         all_combinations = []

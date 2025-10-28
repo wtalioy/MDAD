@@ -1,4 +1,4 @@
-from melo.api import TTS
+from .src_melo.api import TTS
 from .base import BaseTTS
 
 class MeloTTS(BaseTTS):

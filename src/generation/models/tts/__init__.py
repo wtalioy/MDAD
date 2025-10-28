@@ -1,5 +1,5 @@
 from .base import BaseTTS
-from .vits.vits import VITS
+from .vits import VITS
 from .xttsv2 import XTTSv2
 from .yourtts import YourTTS
 from .tacotron2 import Tacotron2

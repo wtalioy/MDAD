@@ -8,14 +8,14 @@ from torchcontrib.optim import SWA
 from importlib import import_module
 from tqdm import tqdm
 from loguru import logger
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 
-from baselines.aasist.utils import create_optimizer
+from .utils import create_optimizer
 
-from baselines import Baseline
-from config import Label
+from ..base import Baseline
+from ...config import Label
 
 class AASIST_Base(Baseline):
     def __init__(self, model_name: str = "AASIST", device: str = "cuda", **kwargs):
@@ -24,10 +24,10 @@ class AASIST_Base(Baseline):
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
         model_args = self._load_model_config(os.path.dirname(__file__), model_name)
         self.model = self._load_model(model_args)
-        self.supported_metrics = ['eer', 'tdcf']
+        self.supported_metrics = ['eer', 'tdcf', 'auroc']
 
     def _load_model(self, config: dict):
-        module = import_module("baselines.aasist.models.{}".format(config["architecture"]))
+        module = import_module(".models.{}".format(config["architecture"]))
         _model = getattr(module, "Model")
         model = _model(config).to(self.device)
         return model
@@ -78,7 +78,7 @@ class AASIST_Base(Baseline):
                 pbar.set_description('epoch: %d, cce:%.3f'%(epoch, batch_loss))
                 pbar.update(1)
 
-    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str):
+    def train(self, train_data: List[np.ndarray], train_labels: np.ndarray, eval_data: List[np.ndarray], eval_labels: np.ndarray, dataset_name: str, **kwargs):
         train_config = self._load_train_config(os.path.dirname(__file__), dataset_name)
         train_loader = self._prepare_loader(train_data, train_labels, batch_size=train_config['batch_size'])
         eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=16)
@@ -111,13 +111,13 @@ class AASIST_Base(Baseline):
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
 
-    def evaluate(self, data: List[np.ndarray], labels: np.ndarray, metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
+    def evaluate(self, data: List[np.ndarray], labels: List[Label], metrics: List[str], in_domain: bool = False, dataset_name: Optional[str] = None, **kwargs) -> dict:
         if in_domain:
             self.model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")))
         else:
             self.model.load_state_dict(torch.load(self.default_ckpt))
             if Label.real != 1:
-                labels = 1 - labels
+                labels = [1 - label for label in labels]
 
         data_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=16)
 
@@ -129,6 +129,21 @@ class AASIST_Base(Baseline):
             metric_rst = func(data_loader)
             results[metric] = metric_rst
         return results
+
+    @torch.no_grad()
+    def _evaluate_auroc(self, eval_loader: DataLoader) -> float:
+        self.model.eval()
+        scores = []
+        labels = []
+        with tqdm(total = len(eval_loader), desc="Evaluating AUROC") as pbar:
+            for batch, label in eval_loader:
+                batch = batch.to(self.device)
+                _, batch_out = self.model(batch)
+                batch_scores = batch_out[:, 1].data.cpu().numpy().ravel()
+                scores.extend(batch_scores.tolist())
+                labels.extend(label)
+                pbar.update(1)
+        return float(roc_auc_score(labels, np.array(scores)))
 
 class AASIST(AASIST_Base):
     def __init__(self, device: str = "cuda", **kwargs):
