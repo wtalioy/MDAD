@@ -40,8 +40,8 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
     t8 = (1.0 / (n * m * r)) * torch.einsum('ij,ij->', Kxy, Kxz) - u_xz * u_xy
     t9 = (1.0 / (r**2 * m)) * torch.einsum('ij,ij->', Kzznd, Kxz) - u_zz * u_xz
 
-    if type(epsilon) == torch.Tensor:
-        epsilon_tensor = epsilon.clone().detach()
+    if isinstance(epsilon, torch.Tensor):
+        epsilon_tensor = epsilon.detach().clone().to(Kyy.device)
     else:
         epsilon_tensor = torch.tensor(epsilon, device=Kyy.device)
     zeta1 = torch.max(t1 + t2 + t3 + t4 + t5 + t6 - 2 * (t7 + t8 + t9), epsilon_tensor)
@@ -125,7 +125,7 @@ def MMD_3_Sample_Test(
     # Ensure Diff_Var is positive and not too small
     if Diff_Var.item() <= 1e-8 or torch.isnan(Diff_Var).any():
         logger.warning(f"Diff_Var is too small, zero, negative or NaN. Diff_Var: {Diff_Var.item()}")
-        Diff_Var = torch.max(torch.tensor(epsilon), torch.tensor(1e-08))
+        Diff_Var = torch.tensor(max(epsilon.item() if isinstance(epsilon, torch.Tensor) else epsilon, 1e-08), device=Diff_Var.device)
 
     # Compute the test statistic safely
     sqrt_diff_var = torch.sqrt(Diff_Var)
