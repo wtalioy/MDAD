@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mdad"
+version = "0.1.0"
+description = "MDAD Benchmark Experiments"
+readme = "README.md"
+requires-python = ">=3.12"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/wtalioy/MDAD"
+
+[project.scripts]
+mdad-run = "src.eval.experiments.cli:main"
+mdad-eval = "src.eval.main:main"
+mdad-generate = "src.generation.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
