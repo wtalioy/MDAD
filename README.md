@@ -22,7 +22,6 @@ MDAD is a large-scale benchmark for both evaluating audio deepfake detection and
 - **Baselines**: [Available Baselines](#available-baselines)
 - **Metrics**: [Evaluation Metrics](#evaluation-metrics)
 - **Advanced Usage**: [Advanced Usage](#advanced-usage)
-- **Repository Structure**: [Repository Structure](#repository-structure)
 - **Logging and Results**: [Logging and Results](#logging-and-results)
 - **Citation**: [Citation](#citation)
 - **License**: [License](#license)
@@ -48,12 +47,22 @@ conda create -n mdad python=3.12 -y
 conda activate mdad
 pip install -r requirements.txt
 python -m unidic download
+
+# Build monotonic align for VITS model
 cd src/generation/models/tts/vits/monotonic_align
 python setup.py build_ext --inplace
 cd ../../../../../..
 ```
 
-3. **Download datasets**: 
+3. **Install the project in editable mode**:
+
+This step makes the custom command-line scripts available.
+
+```bash
+pip install -e .
+```
+
+4. **Download datasets**: 
 ```bash
 mkdir data
 cd data
@@ -63,30 +72,51 @@ cd ../..
 
 ## 🚀 Quick Start
 
-Run a quick evaluation or generation with the most common options.
+The recommended way to use MDAD is through the provided command-line scripts, which become available after installation.
 
-### Evaluation
+### Run Experiments
+
+The `mdad-run` command executes the predefined benchmark experiments.
+
 ```bash
-# Cross-domain evaluation on two datasets
-python src/eval/main.py --baseline aasist --dataset interview publicspeech --mode cross --metric eer
+# Run all four benchmark experiments
+mdad-run
 
-# In-domain train+eval
-python src/eval/main.py --baseline aasist --dataset interview --mode in --metric eer
+# Run a specific experiment (e.g., experiment 1)
+mdad-run -e expr1
+
+# Run an experiment with a specific baseline
+mdad-run -e expr1 -b aasist rawnet2
 ```
 
-### Generation
+### Standalone Evaluation
+
+Use `mdad-eval` to run a custom evaluation on one or more datasets.
+
 ```bash
-# Generate English podcast samples using reference-speaker TTS
-python src/generation/main.py -d podcast -t xttsv2 yourtts -s en
+# Cross-domain evaluation
+mdad-eval --baseline aasist --dataset interview publicspeech --mode cross
+
+# In-domain train+eval
+mdad-eval --baseline rawnet2 --dataset movie --mode in
+```
+
+### Standalone Generation
+
+Use `mdad-generate` to synthesize new deepfake audio for a dataset.
+
+```bash
+# Generate English podcast samples using XTTSv2
+mdad-generate -d podcast -t xttsv2 -s en
 ```
 
 ## 🧪 Evaluation Guide
 
-Evaluate baseline models across domains with unified CLI.
+Evaluate baseline models using the `mdad-eval` command.
 
 ### CLI
 ```bash
-python src/eval/main.py \
+mdad-eval \
   -b aasist rawnet2 \
   -d phonecall publicspeech interview \
   -m cross \
@@ -105,16 +135,16 @@ python src/eval/main.py \
 ### Modes
 - **Cross-domain**: evaluate without training
   ```bash
-  python src/eval/main.py -b aasist rawnet2 -d phonecall publicspeech interview -m cross --metric eer
+  mdad-eval -b aasist rawnet2 -d phonecall publicspeech interview -m cross --metric eer
   ```
 - **In-domain**: optional training followed by evaluation
   ```bash
   # Train only
-  python src/eval/main.py -b aasist -d interview -m in --train_only
+  mdad-eval -b aasist -d interview -m in --train_only
   # Eval only (using existing checkpoints)
-  python src/eval/main.py -b aasist -d interview -m in --eval_only --metric eer
+  mdad-eval -b aasist -d interview -m in --eval_only --metric eer
   # Train + Eval
-  python src/eval/main.py -b aasist -d interview -m in --metric eer
+  mdad-eval -b aasist -d interview -m in --metric eer
   ```
 
 ### Outputs
@@ -123,11 +153,11 @@ python src/eval/main.py \
 
 ## 🔊 Generation Guide
 
-Generate synthetic audio for raw domains using TTS and optional Voice Conversion (VC) models.
+Generate synthetic audio for raw domains using the `mdad-generate` command.
 
 ### CLI
 ```bash
-python src/generation/main.py \
+mdad-generate \
   -d podcast \
   -t xttsv2 yourtts \
   -v openvoice \
@@ -171,23 +201,59 @@ $env:OPENAI_API_KEY="..."; $env:GOOGLE_API_KEY="..."; $env:ELEVENLABS_API_KEY=".
 ### Examples
 - **TTS-only English podcast generation** (reference-speaker TTS):
 ```bash
-python src/generation/main.py -d podcast -t xttsv2 yourtts -s en
+mdad-generate -d podcast -t xttsv2 yourtts -s en
 ```
 
 - **Chinese news with TTS+VC** (pairs TTS that require VC with a VC model):
 ```bash
-python src/generation/main.py -d news -t gpt4omini melotts bark -v openvoice -s zh-cn
+mdad-generate -d news -t gpt4omini melotts bark -v openvoice -s zh-cn
 ```
 
 - **PartialFake composition across domains**:
 ```bash
-python src/generation/main.py -d partialfake -t xttsv2 -v openvoice
+mdad-generate -d partialfake -t xttsv2 -v openvoice
 ```
 
 ### Outputs and logs
 - Generated files: `data/{Dataset}/audio/fake/...`
 - Updated metadata: `data/{Dataset}/meta.json`
 - Logs: `logs/generation*.log`
+
+## 🔬 Experiment Guide
+
+MDAD includes four predefined benchmark experiments to test different aspects of deepfake detection models. Use the `mdad-run` command to execute them.
+
+### CLI
+
+```bash
+# Run all experiments for all default baselines
+mdad-run
+
+# Run a single experiment
+mdad-run -e expr1
+
+# Run a single experiment for a subset of baselines
+mdad-run -e expr1 -b aasist rawnet2
+```
+
+### Arguments
+
+- **-e / --experiment**: one of `expr1`, `expr2`, `expr3`, `expr4`, or `all` (default).
+- **-b / --baseline**: one or more baseline models.
+- **--data_dir**: path to the data directory.
+- **--device**: compute device (`cuda` or `cpu`).
+
+### Experiment Descriptions
+
+- **`expr1`**: Domain Generalization Stress Test (Scripted-to-Spontaneous)
+- **`expr2`**: Emotional Prosody Uncanny Valley Test
+- **`expr3`**: Sensitivity vs. Robustness Test
+- **`expr4`**: Cross-Language Generalization Test
+
+### Outputs
+
+- Per-experiment results are saved to `logs/results_{timestamp}.json`.
+- Detailed logs are saved to `logs/experiments_{timestamp}.log`.
 
 ## 🎯 Available Baselines
 
@@ -201,7 +267,7 @@ MTAD includes 6 state-of-the-art audio deepfake detection models:
 | **Res-TSSDNet** | Time-domain synthetic speech detection net (Resnet Net Style) | [IEEE 2021](https://arxiv.org/abs/2106.06341) |
 | **Inc-TSSDNet** | Time-domain synthetic speech detection net (Inception Net Style) | [IEEE 2021](https://arxiv.org/abs/2106.06341) |
 | **RawGAT-ST** | End-to-End Spectro-Temporal Graph Attention Networks for Speaker Verification Anti-Spoofing and Speech Deepfake Detection | [ASVspoof 2021 Workshop](https://arxiv.org/abs/2107.12710) |
-| **ARDetect** | Maximum Mean Discrepancy based detection | [Published soon]() |
+| **MKRT** | Maximum Mean Discrepancy based detection | [Published soon]() |
 
 ## 📈 Evaluation Metrics
 
@@ -248,52 +314,7 @@ class MyBaseline(Baseline):
 Model configurations are stored in `src/eval/baselines/{model}/config/`:
 - `model.yaml`: Model architecture configuration
 - `train_default.yaml`: Default training configuration
-- `train_{dataset}.yaml`: Dataset-specific training configuration
 
-## 📁 Repository Structure
-
-```
-MTAD/
-├── data/                          # Dataset directory
-├── src/
-│   ├── eval/
-│   │   ├── main.py               # Main evaluation script
-│   │   ├── config.py             # Configuration definitions
-│   │   ├── baselines/            # Baseline model implementations
-│   │   │   ├── aasist/
-│   │   │   ├── rawnet2/
-│   │   │   ├── TSSDNet/
-│   │   │   ├── RawGAT_ST/
-│   │   │   └── ardetect/
-│   │   └── mdad_datasets/        # Dataset loading implementations
-│   ├── generation/               # Audio generation tools
-│   │   ├── main.py               # Main generation script
-│   │   ├── models/               # TTS and Voice Conversion models
-│   │   │   ├── tts/              # Text-to-Speech models
-│   │   │   │   ├── bark.py       # Bark TTS model
-│   │   │   │   ├── elevenlabs_tts.py # ElevenLabs TTS API
-│   │   │   │   ├── gemini_tts.py # Gemini TTS model
-│   │   │   │   ├── gpt4omini_tts.py # GPT-4o Mini TTS
-│   │   │   │   ├── melotts.py    # MeloTTS model
-│   │   │   │   ├── tacotron2.py  # Tacotron2 model
-│   │   │   │   ├── vits/         # VITS model implementation
-│   │   │   │   ├── xttsv2.py     # XTTS v2 model
-│   │   │   │   └── yourtts.py    # YourTTS model
-│   │   │   └── vc/               # Voice Conversion models
-│   │   │       ├── freevc.py     # FreeVC model
-│   │   │       ├── knnvc.py      # kNN-VC model
-│   │   │       └── openvoice.py  # OpenVoice model
-│   │   ├── noise/                # Background noise samples
-│   │   ├── samples/              # Sample audio files
-│   │   │   ├── en.wav            # English sample
-│   │   │   └── zh-cn.wav         # Chinese sample
-│   │   └── transcription/        # Speech-to-text tools
-│   │       ├── parakeet.py       # Parakeet transcription
-│   │       └── voxtral.py        # Voxtral transcription
-│   └── utils/                    # Utility functions
-├── requirements.txt              # Python dependencies
-└── README.md                     # This file
-```
 
 ## 📊 Logging and Results
 
