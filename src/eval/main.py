@@ -34,7 +34,7 @@ def main():
     torch.backends.cudnn.benchmark = True
     torch.multiprocessing.set_sharing_strategy('file_system')
     os.makedirs("logs", exist_ok=True)
-    log_id = logger.add("logs/eval.log", rotation="20 MB", retention="60 days")
+    logger.add("logs/eval.log", rotation="20 MB", retention="60 days")
     
     for dataset in args.dataset:
         logger.info(f"Preparing {dataset} ...")
@@ -50,9 +50,7 @@ def main():
             elif args.mode == "in":
                 if not args.eval_only:
                     logger.info("Training baseline ...")
-                    logger.remove(log_id)
                     dataset.train(baseline)
-                    log_id = logger.add("logs/eval.log", rotation="100 MB", retention="60 days")
                 if not args.train_only:
                     logger.info("Evaluating baseline ...")
                     results = dataset.evaluate(baseline, args.metric, in_domain=True)
