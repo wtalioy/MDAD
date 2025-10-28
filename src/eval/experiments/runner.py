@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
-import torch
+import random
 from loguru import logger
 
 from ..baselines import BASELINE_MAP
@@ -13,7 +13,6 @@ from ..mdad_datasets import DATASET_MAP
 from . import CrossLanguageExperimentConfig, ExperimentConfig
 
 __all__ = ["ExperimentRunner"]
-
 
 class ExperimentRunner:
     def __init__(self, data_dir: str, baselines: List[str], device: str = "cuda"):
@@ -30,7 +29,7 @@ class ExperimentRunner:
         logger.add(log_file, rotation="20 MB", retention="30 days")
 
     def _create_combined_dataset(
-        self, dataset_names: List[str], split: str, subset: str | None = None, limit: int | None = None
+        self, dataset_names: List[str], split: str, subset: str | None = None, shuffle: bool = True, limit: int | None = None
     ) -> Tuple[List[Any], List[Any]]:
         """Combine multiple datasets for a specific split, using a cache."""
 
@@ -56,11 +55,15 @@ class ExperimentRunner:
             combined_labels.extend(ds.labels[split])
             logger.info(f"Added {len(split_data)} samples from {ds_name} {split}")
 
+        if shuffle:
+            random.seed(34)
+            indices = list(range(len(combined_data)))
+            random.shuffle(indices)
+            combined_data = [combined_data[i] for i in indices]
+            combined_labels = [combined_labels[i] for i in indices]
         if limit is not None and len(combined_data) > limit:
-            torch.manual_seed(34)
-            idx = torch.randperm(len(combined_data))[:limit].tolist()
-            combined_data = [combined_data[i] for i in idx]
-            combined_labels = [combined_labels[i] for i in idx]
+            combined_data = combined_data[:limit]
+            combined_labels = combined_labels[:limit]
 
         logger.info(f"Combined {split}: {len(combined_data)} total samples from {len(dataset_names)} datasets")
         return combined_data, combined_labels
@@ -73,7 +76,7 @@ class ExperimentRunner:
         logger.info(f"Training {baseline_name} on {train_datasets}")
 
         train_data, train_labels = self._create_combined_dataset(train_datasets, "train", subset)
-        val_data, val_labels = self._create_combined_dataset(val_datasets, "dev", subset)
+        val_data, val_labels = self._create_combined_dataset(val_datasets, "dev", subset, shuffle=False)
 
         if not train_data:
             logger.warning(f"No training data found for {train_datasets}")
@@ -116,7 +119,7 @@ class ExperimentRunner:
             dataset = DATASET_MAP[test_datasets[0]](data_dir=self.data_dir)
             return dataset.evaluate(baseline, ["eer"], in_domain=True, expr_name=expr_name)
 
-        test_data, test_labels = self._create_combined_dataset(test_datasets, "test", subset)
+        test_data, test_labels = self._create_combined_dataset(test_datasets, "test", subset, shuffle=False)
         if not test_data:
             logger.warning(f"No test data found for {test_datasets}")
             return {"eer": float("inf")}
