@@ -25,7 +25,8 @@ class ExperimentRunner:
         self._dataset_cache: Dict[Tuple[str, str | None], Any] = {}
 
         os.makedirs("logs", exist_ok=True)
-        log_file = f"logs/experiments_{self.timestamp}.log"
+        os.makedirs("results", exist_ok=True)
+        log_file = f"logs/experiment_{self.timestamp}.log"
         logger.add(log_file, rotation="20 MB", retention="30 days")
 
     def _create_combined_dataset(
@@ -195,7 +196,7 @@ class ExperimentRunner:
 
     def save_results(self):
         """Save results to a JSON file."""
-        results_file = f"logs/results_{self.timestamp}.json"
+        results_file = f"results/result_{self.timestamp}.json"
         with open(results_file, "w") as f:
             json.dump(self.results, f, indent=2)
         logger.info(f"Results saved to {results_file}")
