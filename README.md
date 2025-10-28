@@ -1,5 +1,5 @@
 # MDAD: Multi-Dimensional Audio Deepfake Benchmark
-[![Hugging Face%20-%20MDAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20MTAD-blue)](https://huggingface.co/datasets/Lioy/MDAD)
+[![Hugging Face%20-%20MDAD](https://img.shields.io/badge/🤗%20Hugging%20Face%20-%20MDAD-blue)](https://huggingface.co/datasets/Lioy/MDAD)
 
 MDAD is a large-scale benchmark for both evaluating audio deepfake detection and synthesizing realistic, dataset-aligned deepfake audio on diverse dimensions. This repository includes an evaluation suite with state-of-the-art baselines and a modular generation toolkit (TTS + Voice Conversion) to synthesize deepfake audio.
 
