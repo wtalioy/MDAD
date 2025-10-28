@@ -5,9 +5,9 @@ import librosa
 from tqdm import tqdm
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
-from baselines import Baseline
+from ..baselines import Baseline
 from .base import BaseDataset
-from config import Label
+from ..config import Label
 
 class NoisySpeech(BaseDataset):
     def __init__(self, data_dir=None, *args, **kwargs):

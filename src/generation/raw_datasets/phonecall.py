@@ -1,6 +1,6 @@
 import os
 from typing import List
-from models import BaseTTS, BaseVC
+from ..models import BaseTTS, BaseVC
 from .base import BaseRawDataset
 
 class PhoneCall(BaseRawDataset):

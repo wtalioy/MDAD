@@ -8,8 +8,8 @@ import librosa
 import numpy as np
 from tqdm import tqdm
 
-from baselines import Baseline
-from config import Label
+from ..baselines import Baseline
+from ..config import Label
 
 class BaseDataset:
     def __init__(self, data_dir: Optional[str] = None, *args, **kwargs):

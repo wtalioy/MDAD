@@ -5,8 +5,8 @@ from datasets import load_dataset
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from .base import BaseDataset
-from baselines import Baseline
-from config import Label
+from ..baselines import Baseline
+from ..config import Label
 
 class ASVspoof2021(BaseDataset):
     def __init__(self, subset="LA", *args, **kwargs):

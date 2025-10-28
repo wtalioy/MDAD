@@ -10,10 +10,10 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 from loguru import logger
 
-from baselines.RawGAT_ST.model import RawGAT_ST as RawGAT_ST_Model
+from .model import RawGAT_ST as RawGAT_ST_Model
 
-from baselines import Baseline
-from config import Label
+from ..base import Baseline
+from ...config import Label
 
 class RawGAT_ST(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):

@@ -12,10 +12,10 @@ from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 
-from baselines.aasist.utils import create_optimizer
+from .utils import create_optimizer
 
-from baselines import Baseline
-from config import Label
+from ..base import Baseline
+from ...config import Label
 
 class AASIST_Base(Baseline):
     def __init__(self, model_name: str = "AASIST", device: str = "cuda", **kwargs):
@@ -27,7 +27,7 @@ class AASIST_Base(Baseline):
         self.supported_metrics = ['eer', 'tdcf', 'auroc']
 
     def _load_model(self, config: dict):
-        module = import_module("baselines.aasist.models.{}".format(config["architecture"]))
+        module = import_module(".models.{}".format(config["architecture"]))
         _model = getattr(module, "Model")
         model = _model(config).to(self.device)
         return model

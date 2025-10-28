@@ -1,8 +1,8 @@
 import os
 import argparse
 from loguru import logger
-from models import TTS_MODEL_MAP, VC_MODEL_MAP
-from raw_datasets import RAWDATASET_MAP
+from .models import TTS_MODEL_MAP, VC_MODEL_MAP
+from .raw_datasets import RAWDATASET_MAP
 from datetime import datetime
 
 

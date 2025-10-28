@@ -10,11 +10,11 @@ from typing import List, Optional
 import numpy as np
 import os
 
-from baselines.RawNet2.model import RawNet as RawNetModel
-from baselines.RawNet2.utils import *
+from .model import RawNet as RawNetModel
+from .utils import *
 
-from baselines import Baseline
-from config import Label
+from ..base import Baseline
+from ...config import Label
 
 class RawNet2(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):

@@ -8,9 +8,9 @@ import numpy as np
 from tqdm import tqdm
 from loguru import logger
 from sklearn.metrics import roc_auc_score
-from baselines.TSSDNet.models import SSDNet1D, DilatedNet
-from baselines import Baseline
-from config import Label
+from .models import SSDNet1D, DilatedNet
+from ..base import Baseline
+from ...config import Label
 
 class TSSDNet_Base(Baseline):
     def __init__(self, ckpt: str = "Res-TSSDNet", device: str = "cuda", **kwargs):

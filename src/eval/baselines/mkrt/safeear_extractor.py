@@ -3,7 +3,7 @@ import hydra
 from omegaconf import OmegaConf
 import numpy as np
 import os
-from baselines.utils import download_from_url
+from ..utils import download_from_url
 from typing import Optional
 
 class SafeEarExtractor:

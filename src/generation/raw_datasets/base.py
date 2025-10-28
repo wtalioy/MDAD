@@ -1,5 +1,5 @@
 from typing import List
-from models import BaseTTS, BaseVC
+from ..models import BaseTTS, BaseVC
 import os
 import json
 from loguru import logger

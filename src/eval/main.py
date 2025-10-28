@@ -3,8 +3,8 @@ import argparse
 import warnings
 import torch
 from loguru import logger
-from baselines import BASELINE_MAP
-from mdad_datasets import DATASET_MAP
+from .baselines import BASELINE_MAP
+from .mdad_datasets import DATASET_MAP
 
 def display_results(results: dict, baseline: str, dataset: str):
     if isinstance(list(results.values())[0], dict): # PartialFake and NoisySpeech specific

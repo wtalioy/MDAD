@@ -1,6 +1,6 @@
 from typing import List
 import os
-from models import BaseTTS, BaseVC
+from ..models import BaseTTS, BaseVC
 from .base import BaseRawDataset
 
 class Movie(BaseRawDataset):

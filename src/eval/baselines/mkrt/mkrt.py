@@ -12,10 +12,10 @@ from datasets import load_dataset
 from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.stats import combine_pvalues
 
-from baselines import Baseline
-from baselines.mkrt.mmd_model import MMDModel
-from baselines.mkrt.mmd_utils import MMD_3_Sample_Test, MMDu
-from config import Label
+from ..base import Baseline
+from .mmd_model import MMDModel
+from .mmd_utils import MMD_3_Sample_Test, MMDu
+from ...config import Label
 
 class MKRT(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):

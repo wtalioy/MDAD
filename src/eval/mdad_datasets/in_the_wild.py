@@ -5,8 +5,8 @@ import librosa
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from .base import BaseDataset
-from baselines import Baseline
-from config import Label
+from ..baselines import Baseline
+from ..config import Label
 
 class InTheWild(BaseDataset):
     def __init__(self, data_dir=None, *args, **kwargs):

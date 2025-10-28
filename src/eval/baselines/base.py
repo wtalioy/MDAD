@@ -6,7 +6,7 @@ import os
 import torch
 from torch.utils.data import Dataset, DataLoader
 import yaml
-from config import Label
+from ..config import Label
 
 class Baseline:
     def __init__(self, device: str = "cuda", **kwargs):

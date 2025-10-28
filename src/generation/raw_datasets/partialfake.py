@@ -8,8 +8,8 @@ from loguru import logger
 import numpy as np
 from tqdm import tqdm
 from typing import List
-from models import BaseTTS, BaseVC
-from transcription.parakeet import Parakeet
+from ..models import BaseTTS, BaseVC
+from ..transcription.parakeet import Parakeet
 
 class PartialFake(BaseRawDataset):
     def __init__(self, data_dir=None, *args, **kwargs):
