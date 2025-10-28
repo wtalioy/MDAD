@@ -55,9 +55,6 @@ cd ../../../../../..
 ```
 
 3. **Install the project in editable mode**:
-
-This step makes the custom command-line scripts available.
-
 ```bash
 pip install -e .
 ```
@@ -95,10 +92,10 @@ Use `mdad-eval` to run a custom evaluation on one or more datasets.
 
 ```bash
 # Cross-domain evaluation
-mdad-eval --baseline aasist --dataset interview publicspeech --mode cross
+mdad-eval -b aasist -d interview publicspeech -m cross
 
 # In-domain train+eval
-mdad-eval --baseline rawnet2 --dataset movie --mode in
+mdad-eval -b rawnet2 -d movie -m in
 ```
 
 ### Standalone Generation
@@ -117,20 +114,20 @@ Evaluate baseline models using the `mdad-eval` command.
 ### CLI
 ```bash
 mdad-eval \
-  -b aasist rawnet2 \
+  -b aasist mkrt rawnet2 \
   -d phonecall publicspeech interview \
   -m cross \
   --metric eer
 ```
 
 ### Arguments
-- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `ardetect`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
+- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `mkrt`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
 - **-d / --dataset**: one or more of: `publicfigure`, `news`, `podcast`, `partialfake`, `audiobook`, `noisyspeech`, `phonecall`, `interview`, `publicspeech`, `movie`, `emotional`, `asvspoof2021`, `in-the-wild`
-- **-m / --mode**: `cross` or `in`
+- **-m / --mode**: `cross` or `in` (for cross-domain or in-domain evaluation)
 - **-s / --subset**: dataset-specific subset (if applicable)
 - **--metric**: one or more metrics, e.g. `eer`, `auroc`
 - **--train_only / --eval_only**: restrict to one stage in `in` mode
-- **--data_dir**: path to data root (default: `data`)
+- **--data_dir**: path to data root (default: `data/MDAD`)
 
 ### Modes
 - **Cross-domain**: evaluate without training
@@ -140,11 +137,11 @@ mdad-eval \
 - **In-domain**: optional training followed by evaluation
   ```bash
   # Train only
-  mdad-eval -b aasist -d interview -m in --train_only
-  # Eval only (using existing checkpoints)
-  mdad-eval -b aasist -d interview -m in --eval_only --metric eer
+  mdad-eval -b mkrt -d interview -m in --train_only
+  # Eval only (using existing trained checkpoints)
+  mdad-eval -b mkrt -d interview -m in --eval_only --metric eer
   # Train + Eval
-  mdad-eval -b aasist -d interview -m in --metric eer
+  mdad-eval -b mkrt -d interview -m in --metric eer
   ```
 
 ### Outputs
@@ -168,18 +165,18 @@ mdad-generate \
 - **-d / --dataset**: one or more of: `news`, `podcast`, `movie`, `phonecall`, `interview`, `publicspeech`, `partialfake`, `noisyspeech`
 - **-t / --tts_model**: one or more of: `vits`, `xttsv2`, `yourtts`, `tacotron2`, `bark`, `melotts`, `elevenlabs`, `geminitts`, `gpt4omini`
 - **-v / --vc_model**: optional VC models: `knnvc`, `freevc`, `openvoice`
-- **-s / --subset**: language/subset for certain datasets (e.g., `phonecall`). Common values: `en`, `zh-cn` (default: `zh-cn`)
-- **--data_dir**: custom data root for the selected dataset(s). If omitted, defaults to `data/{Dataset}`
+- **-s / --subset**: subset specific for PhoneCall dataset: `en` or `zh-cn`
+- **--data_dir**: path to data root (default: `data/MDAD`)
 
 Notes:
 - Some TTS models require VC (their voices are not speaker-conditioned). These are marked internally and will be paired with provided VC models if any.
 - TTS models that support reference audio (e.g., `xttsv2`, `yourtts`) can run without VC.
 
 ### Dataset expectations
-- Each dataset directory should contain a `meta.json` describing items and real audio paths, e.g. `data/Podcast/meta.json` with `audio/real/...` entries.
+- Each dataset directory should contain a `meta.json` describing items and real audio paths, e.g. `Podcast/meta.json` with `audio/real/...` entries.
 - Generated audio is saved under `audio/fake/...` and `meta.json` is updated with a mapping per model.
-- `phonecall` expects a subfolder by subset: `data/PhoneCall/en` or `data/PhoneCall/zh-cn`.
-- `partialfake` will build its own `meta.json` by sampling from `Interview`, `Podcast`, and `PublicSpeech` test metadata. Ensure these exist at `data/{Domain}/meta_test.json`.
+- `phonecall` expects a subfolder by subset: `PhoneCall/en` or `PhoneCall/zh-cn`.
+- `partialfake` will build its own `meta.json` by sampling from `Interview`, `Podcast`, and `PublicSpeech` test metadata. Ensure these exist at `{Domain}/meta_test.json`.
 
 ### Environment variables for cloud TTS
 Set the following if you use those providers:
@@ -206,7 +203,7 @@ mdad-generate -d podcast -t xttsv2 yourtts -s en
 
 - **Chinese news with TTS+VC** (pairs TTS that require VC with a VC model):
 ```bash
-mdad-generate -d news -t gpt4omini melotts bark -v openvoice -s zh-cn
+mdad-generate -d news -t gpt4omini melotts bark -v openvoice
 ```
 
 - **PartialFake composition across domains**:
@@ -215,8 +212,8 @@ mdad-generate -d partialfake -t xttsv2 -v openvoice
 ```
 
 ### Outputs and logs
-- Generated files: `data/{Dataset}/audio/fake/...`
-- Updated metadata: `data/{Dataset}/meta.json`
+- Generated files: `{Dataset}/audio/fake/...`
+- Updated metadata: `{Dataset}/meta.json`
 - Logs: `logs/generation*.log`
 
 ## 🔬 Experiment Guide
@@ -239,9 +236,9 @@ mdad-run -e expr1 -b aasist rawnet2
 ### Arguments
 
 - **-e / --experiment**: one of `expr1`, `expr2`, `expr3`, `expr4`, or `all` (default).
-- **-b / --baseline**: one or more baseline models.
+- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `mkrt`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
 - **--data_dir**: path to the data directory.
-- **--device**: compute device (`cuda` or `cpu`).
+- **--device**: compute device (`cuda` or `cpu`, default: `cuda`).
 
 ### Experiment Descriptions
 
@@ -252,12 +249,12 @@ mdad-run -e expr1 -b aasist rawnet2
 
 ### Outputs
 
-- Per-experiment results are saved to `logs/results_{timestamp}.json`.
-- Detailed logs are saved to `logs/experiments_{timestamp}.log`.
+- Per-experiment results are saved to `results/result_{timestamp}.json`.
+- Detailed logs are saved to `logs/experiment_{timestamp}.log`.
 
 ## 🎯 Available Baselines
 
-MTAD includes 6 state-of-the-art audio deepfake detection models:
+MDAD includes 6 state-of-the-art audio deepfake detection models:
 
 | Baseline | Description | Paper |
 |----------|-------------|-------|
@@ -271,7 +268,7 @@ MTAD includes 6 state-of-the-art audio deepfake detection models:
 
 ## 📈 Evaluation Metrics
 
-MTAD supports the following evaluation metrics:
+MDAD supports the following evaluation metrics:
 
 - **EER** (Equal Error Rate): Primary metric for audio deepfake detection
 - **AUROC** (Area Under the Receiver Operating Characteristic Curve): Secondary metric for audio deepfake detection
