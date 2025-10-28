@@ -19,9 +19,9 @@ classifiers = [
 "Homepage" = "https://github.com/wtalioy/MDAD"
 
 [project.scripts]
-mdad-run = "src.eval.experiments.cli:main"
-mdad-eval = "src.eval.main:main"
-mdad-generate = "src.generation.main:main"
+mdad-run = "eval.experiments.cli:main"
+mdad-eval = "eval.main:main"
+mdad-generate = "generation.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
