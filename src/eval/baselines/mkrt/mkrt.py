@@ -159,6 +159,10 @@ class MKRT(Baseline):
         best_epoch = 0
         save_path = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+        worse_epochs = 0
+        patience = args.get("patience", 5) 
+
         for epoch in range(args['num_epoch']):
             self._train_epoch(epoch, train_real, train_fake, batch_size=args['batch_size'])
             if epoch % args['eval_interval'] == 0 and epoch > 0:
@@ -168,8 +172,15 @@ class MKRT(Baseline):
                 if eer < best_eer:
                     best_eer = eer
                     best_epoch = epoch
+                    worse_epochs = 0
                     self.net.save_state_dict(save_path)
                     logger.info(f"New best EER: {100*best_eer:.2f}% at epoch {epoch}")
+                else:
+                    worse_epochs += 1
+                
+                if worse_epochs >= patience:
+                    logger.info(f"Early stopping at epoch {epoch} due to no improvement in EER for {patience * args['eval_interval']} epochs.")
+                    break
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
     

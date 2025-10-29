@@ -1,9 +1,10 @@
 batch_size: 16
 num_epoch: 40
-basemodel_lr: 1.0e-03
-mmd_lr: 1.0e-06
-basemodel_wd: 1.0e-05
+basemodel_lr: 1.0e-04
+mmd_lr: 1.0e-04
+basemodel_wd: 1.0e-04
 mmd_wd: 1.0e-03
 eval_interval: 2
+patience: 4
 
 seed: 42
