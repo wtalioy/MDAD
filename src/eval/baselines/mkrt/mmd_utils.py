@@ -26,8 +26,9 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
 
     u_yy = torch.sum(Kyynd) * (1.0 / n)
     u_zz = torch.sum(Kzznd) * (1.0 / r)
-    u_xy = torch.sum(Kxy) / (m * n)
-    u_xz = torch.sum(Kxz) / (m * r)
+    # use .mean() which fuses the reduction & division on CUDA for speed
+    u_xy = Kxy.mean()
+    u_xz = Kxz.mean()
 
     # use einsum reductions to avoid explicit matrix products
     t1 = (1.0 / n**3) * torch.einsum('ij,ij->', Kyynd, Kyynd) - u_yy**2
@@ -65,7 +66,7 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
         "zeta2": zeta2.item(),
     }
 
-    Var = (4 * (m - 2) / m) * zeta1
+    Var = (4 / m) * zeta1
     Var_z2 = Var + (2.0 / m) * zeta2
 
     return Var, Var_z2, data
@@ -79,7 +80,6 @@ def Pdist2(x, y):
     return Pdist
 
 
-# MMD for three samples
 def MMD_3_Sample_Test(
     ref_fea,
     fea_y,
@@ -92,55 +92,26 @@ def MMD_3_Sample_Test(
     epsilon
 ):
     """Run three-sample test (TST) using deep kernel kernel."""
-    # Direct references – inputs are already detached when entering this function
     Kyy = flexible_kernel(fea_y, fea_y, fea_y_org, fea_y_org, sigma, sigma0, epsilon)
     Kzz = flexible_kernel(fea_z, fea_z, fea_z_org, fea_z_org, sigma, sigma0, epsilon)
     Kxy = flexible_kernel(ref_fea, fea_y, ref_fea_org, fea_y_org, sigma, sigma0, epsilon)
     Kxz = flexible_kernel(ref_fea, fea_z, ref_fea_org, fea_z_org, sigma, sigma0, epsilon)
 
-    Kyy.fill_diagonal_(0.0)
-    Kzz.fill_diagonal_(0.0)
-
-    Diff_Var, _, _ = MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon)
-
     u_yy = torch.sum(Kyy) / (fea_y.shape[0])
     u_zz = torch.sum(Kzz) / (fea_z.shape[0])
-    u_xy = torch.sum(Kxy) / (ref_fea.shape[0] * fea_y.shape[0])
-    u_xz = torch.sum(Kxz) / (ref_fea.shape[0] * fea_z.shape[0])
+    u_xy = Kxy.mean()
+    u_xz = Kxz.mean()
 
     t = u_yy - 2 * u_xy - (u_zz - 2 * u_xz)
 
-    # If using single sample ref, variance calculation is invalid. Return t as the score.
-    if ref_fea.shape[0] == 1:
-        score = torch.sigmoid(-t)
-        return score.item()
+    Diff_Var, _, _ = MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon)
 
-    # Check for NaN values in t
-    if torch.isnan(t).any():
-        logger.warning("t contains NaN values")
-        logger.warning(f"t value: {t}")
-        logger.warning(f"u_yy: {u_yy}, u_zz: {u_zz}, u_xy: {u_xy}, u_xz: {u_xz}")
-        return 1
-
-    # Ensure Diff_Var is positive and not too small
     if Diff_Var.item() <= 1e-8 or torch.isnan(Diff_Var).any():
         logger.warning(f"Diff_Var is too small, zero, negative or NaN. Diff_Var: {Diff_Var.item()}")
         Diff_Var = torch.tensor(max(epsilon.item() if isinstance(epsilon, torch.Tensor) else epsilon, 1e-08), device=Diff_Var.device)
 
-    # Compute the test statistic safely
     sqrt_diff_var = torch.sqrt(Diff_Var)
-    if sqrt_diff_var == 0 or torch.isnan(sqrt_diff_var):
-        logger.warning("sqrt(Diff_Var) is zero or NaN")
-        logger.warning(f"Diff_Var: {Diff_Var.item()}, sqrt_diff_var: {sqrt_diff_var}")
-        return 1
-
     test_stat = -t / sqrt_diff_var
-
-    # Check if test_stat is NaN or inf
-    if torch.isnan(test_stat).any() or torch.isinf(test_stat).any():
-        logger.warning("Test statistic is NaN or inf")
-        logger.warning(f"test_stat: {test_stat}, t: {t}, sqrt_diff_var: {sqrt_diff_var}")
-        return 1
 
     p_value = torch.distributions.Normal(0, 1).cdf(test_stat).item()
 

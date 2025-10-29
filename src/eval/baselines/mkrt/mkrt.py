@@ -37,11 +37,19 @@ class MKRT(Baseline):
         self.net.sigma0_u.requires_grad = True
         self.net.ep.requires_grad = True
         
-        self.optimizer = torch.optim.Adam(
-            list(self.net.basemodel.parameters()) + [self.net.sigma, self.net.sigma0_u, self.net.ep],
-            lr=args['lr'],
-            weight_decay=args['wd']
-        )
+        param_groups = [
+            {
+                'params': self.net.basemodel.parameters(),
+                'lr': args['basemodel_lr'],
+                'weight_decay': args['basemodel_wd'],
+            },
+            {
+                'params': [self.net.sigma, self.net.sigma0_u, self.net.ep],
+                'lr': args['mmd_lr'],
+                'weight_decay': args['mmd_wd'],
+            },
+        ]
+        self.optimizer = torch.optim.Adam(param_groups)
         
         total_steps = args['num_epoch'] * args['steps_per_epoch']
         warmup_steps = max(1, int(0.01 * total_steps))
@@ -107,7 +115,7 @@ class MKRT(Baseline):
                 torch.nn.utils.clip_grad_norm_([self.net.sigma, self.net.sigma0_u, self.net.ep], max_norm=1.0)
                 self.optimizer.step()
                 self.scheduler.step()
-                pbar.set_description('epoch: %d, loss:%.3f'%(epoch, loss.item()))
+                pbar.set_description('epoch:%d, sigma:%.3f, sigma0_u:%.3f, ep:%.3f, loss:%.3f'%(epoch, self.net.sigma.item(), self.net.sigma0_u.item(), self.net.ep.item(), loss.item()))
                 pbar.update(1)
 
     def train(
@@ -138,7 +146,7 @@ class MKRT(Baseline):
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
-        self._auto_tune_bandwidths(ref_real, ref_fake)
+        self._auto_tune_bandwidths(train_real, train_fake)
 
         eval_labels = np.array(eval_labels)
 
