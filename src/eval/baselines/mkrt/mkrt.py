@@ -35,7 +35,7 @@ class MKRT(Baseline):
     def _init_train(self, args: dict):
         self.net.sigma.requires_grad = True
         self.net.sigma0_u.requires_grad = True
-        self.net.ep.requires_grad = True
+        self.net.raw_ep.requires_grad = True
         
         param_groups = [
             {
@@ -44,10 +44,10 @@ class MKRT(Baseline):
                 'weight_decay': args['basemodel_wd'],
             },
             {
-                'params': [self.net.sigma, self.net.sigma0_u, self.net.ep],
+                'params': [self.net.sigma, self.net.sigma0_u],
                 'lr': args['mmd_lr'],
                 'weight_decay': args['mmd_wd'],
-            },
+            }
         ]
         self.optimizer = torch.optim.Adam(param_groups)
         
@@ -112,7 +112,7 @@ class MKRT(Baseline):
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.net.basemodel.parameters(), max_norm=1.0)
-                torch.nn.utils.clip_grad_norm_([self.net.sigma, self.net.sigma0_u, self.net.ep], max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_([self.net.sigma, self.net.sigma0_u, self.net.raw_ep], max_norm=1.0)
                 self.optimizer.step()
                 self.scheduler.step()
                 pbar.set_description('epoch:%d, sigma:%.3f, sigma0_u:%.3f, ep:%.3f, loss:%.3f'%(epoch, self.net.sigma.item(), self.net.sigma0_u.item(), self.net.ep.item(), loss.item()))

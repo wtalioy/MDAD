@@ -164,7 +164,8 @@ class MMDModel:
     def __init__(self, config: dict, device: str):
         self.sigma = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
         self.sigma0_u = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
-        self.ep = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
+        self.raw_ep = nn.Parameter(torch.tensor(0.0, dtype=torch.float, device=device))
+
         self.coeff_xy = config.get("coeff_xy", 2)
         self.is_yy_zero = config.get("is_yy_zero", False)
         self.is_xx_zero = config.get("is_xx_zero", False)
@@ -190,12 +191,15 @@ class MMDModel:
         with torch.no_grad():
             self.sigma.data.fill_(checkpoint["sigma"])
             self.sigma0_u.data.fill_(checkpoint["sigma0_u"])
-            self.ep.data.fill_(checkpoint["ep"])
+
+            # Map stored positive εₚ back to raw parameter space (inverse soft-plus)
+            ep_val = torch.tensor(checkpoint["ep"], device=self.device)
+            raw_val = torch.log(torch.exp(ep_val - 1e-6) - 1.0 + 1e-12)
+            self.raw_ep.data.copy_(raw_val)
         
         self.basemodel.load_state_dict(state_dict)
 
     def save_state_dict(self, ckpt_path: str):
-        """Save the model state dictionary."""
         torch.save({
             "net": self.basemodel.state_dict(),
             "sigma": self.sigma.detach().item(),
@@ -204,6 +208,10 @@ class MMDModel:
         }, ckpt_path)
 
         
+    @property
+    def ep(self):
+        return torch.nn.functional.softplus(self.raw_ep) + 1e-6
+
     def __call__(self, x):
         """Forward pass through the model."""
         return self.basemodel(x)

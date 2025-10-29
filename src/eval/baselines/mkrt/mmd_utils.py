@@ -26,11 +26,9 @@ def MMD_Diff_Var(Kyy, Kzz, Kxy, Kxz, epsilon=1e-08):
 
     u_yy = torch.sum(Kyynd) * (1.0 / n)
     u_zz = torch.sum(Kzznd) * (1.0 / r)
-    # use .mean() which fuses the reduction & division on CUDA for speed
     u_xy = Kxy.mean()
     u_xz = Kxz.mean()
 
-    # use einsum reductions to avoid explicit matrix products
     t1 = (1.0 / n**3) * torch.einsum('ij,ij->', Kyynd, Kyynd) - u_yy**2
     t2 = (1.0 / (n**2 * m)) * torch.einsum('ij,ij->', Kxy, Kxy) - u_xy**2
     t3 = (1.0 / (n * m**2)) * torch.einsum('ij,ij->', Kxy, Kxy) - u_xy**2  # symmetric reuse
