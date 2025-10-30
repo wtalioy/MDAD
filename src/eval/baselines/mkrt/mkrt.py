@@ -151,7 +151,7 @@ class MKRT(Baseline):
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
-        self._auto_tune_bandwidths(train_real, train_fake)
+        self._auto_tune_bandwidths(torch.cat([train_real, train_fake], dim=0))
 
         eval_labels = np.array(eval_labels)
 
@@ -397,7 +397,7 @@ class MKRT(Baseline):
 
         return eer, eer_threshold
 
-    def _auto_tune_bandwidths(self, fea_real: torch.Tensor, fea_fake: torch.Tensor, sample_size: int = 512):
+    def _auto_tune_bandwidths(self, feas: torch.Tensor, sample_size: int = 512):
         """Estimate reasonable initial values for sigma (original space) and sigma0_u (hidden space).
 
         The method samples up to ``sample_size`` utterances from the reference real & fake pools,
@@ -407,19 +407,18 @@ class MKRT(Baseline):
         """
         with torch.inference_mode():
             # Concatenate and sample
-            ref_fea = torch.cat([fea_real, fea_fake], dim=0)
-            total = ref_fea.size(0)
+            total = feas.size(0)
             if total > sample_size:
-                idx = torch.randperm(total, device=ref_fea.device)[:sample_size]
-                ref_fea = ref_fea[idx]
+                idx = torch.randperm(total, device=feas.device)[:sample_size]
+                feas = feas[idx]
 
             # Original-space distances
-            ref_fea_flat = ref_fea.view(ref_fea.size(0), -1)
-            D_org = torch.cdist(ref_fea_flat, ref_fea_flat, p=2).pow(2)
+            feas_flat = feas.view(feas.size(0), -1)
+            D_org = torch.cdist(feas_flat, feas_flat, p=2).pow(2)
             sigma_org = torch.median(D_org)  # 0.5 quantile
 
             # Hidden-space distances (one forward pass)
-            hidden = self.net(ref_fea)
+            hidden = self.net(feas)
             D_hid = torch.cdist(hidden, hidden, p=2).pow(2)
             sigma_hid = torch.quantile(D_hid, 0.9)
 
