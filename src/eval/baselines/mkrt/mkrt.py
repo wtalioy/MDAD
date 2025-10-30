@@ -15,6 +15,7 @@ from scipy.stats import combine_pvalues
 from ..base import Baseline
 from .mmd_model import MMDModel
 from .mmd_utils import MMD_3_Sample_Test, MMDu
+from .safeear_extractor import SafeEarExtractor
 from ...config import Label
 
 class MKRT(Baseline):
@@ -26,10 +27,7 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = Wav2Vec2FeatureExtractor.from_pretrained("./hubert-large-ll60k")
-        self.model = HubertModel.from_pretrained("./hubert-large-ll60k").to(device)
-        self.model.eval()
-
+        self.extractor = SafeEarExtractor()
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
     def _init_train(self, args: dict):
@@ -151,7 +149,7 @@ class MKRT(Baseline):
         ref_fea = self._load_features(ref_data, cache_name=f"ref_{dataset_name}")
         ref_real, ref_fake = self._split_features(ref_fea, ref_labels)
 
-        self._auto_tune_bandwidths(torch.cat([train_real, train_fake], dim=0))
+        self._auto_tune_bandwidths(train_real, train_fake)
 
         eval_labels = np.array(eval_labels)
 
@@ -193,7 +191,7 @@ class MKRT(Baseline):
         self,
         audio_data: List[np.ndarray],
         cache_name: Optional[str] = None,
-        batch_size: int = 32,
+        batch_size: int = 16,
     ) -> torch.Tensor:
         if cache_name is not None:
             cache_path = os.path.join(os.path.dirname(__file__), "cache", f"{cache_name}.pt")
@@ -205,18 +203,14 @@ class MKRT(Baseline):
         chunks = []
         for i in range(0, len(audio_data), batch_size):
             batch_audio = audio_data[i : i + batch_size]
-            input_values = self.extractor(
+            features = self.extractor(
                 batch_audio,
-                sampling_rate=self.sample_rate,
-                padding="max_length",
-                max_length=10000,
+                padding=True,
                 truncation=True,
-                return_tensors="pt",
-            ).input_values.to(self.device, non_blocking=True)
-            with torch.inference_mode():
-                last_hidden = self.model(input_values).last_hidden_state.detach()
-            chunks.append(last_hidden)  # [B, T, H]
-            del input_values, last_hidden, batch_audio
+                max_length=10000,
+            )
+            chunks.extend(features)
+            del batch_audio
 
         features = torch.cat(chunks, dim=0)  # [N, T, H]
 
@@ -397,7 +391,7 @@ class MKRT(Baseline):
 
         return eer, eer_threshold
 
-    def _auto_tune_bandwidths(self, feas: torch.Tensor, sample_size: int = 512):
+    def _auto_tune_bandwidths(self, feas_real: torch.Tensor, feas_fake: torch.Tensor, sample_size: int = 512):
         """Estimate reasonable initial values for sigma (original space) and sigma0_u (hidden space).
 
         The method samples up to ``sample_size`` utterances from the reference real & fake pools,
@@ -406,11 +400,22 @@ class MKRT(Baseline):
         ``self.net.sigma0_u`` to the median hidden-space distance.
         """
         with torch.inference_mode():
-            # Concatenate and sample
-            total = feas.size(0)
+            # Sample from real and fake features and concatenate
+            num_real = feas_real.size(0)
+            num_fake = feas_fake.size(0)
+            total = num_real + num_fake
+
             if total > sample_size:
-                idx = torch.randperm(total, device=feas.device)[:sample_size]
-                feas = feas[idx]
+                # Proportional sampling
+                real_sample_size = int(sample_size * num_real / total)
+                fake_sample_size = sample_size - real_sample_size
+
+                real_indices = torch.randperm(num_real, device=feas_real.device)[:real_sample_size]
+                fake_indices = torch.randperm(num_fake, device=feas_fake.device)[:fake_sample_size]
+                
+                feas = torch.cat([feas_real[real_indices], feas_fake[fake_indices]], dim=0)
+            else:
+                feas = torch.cat([feas_real, feas_fake], dim=0)
 
             # Original-space distances
             feas_flat = feas.view(feas.size(0), -1)

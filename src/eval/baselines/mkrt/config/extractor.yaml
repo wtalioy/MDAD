@@ -1,0 +1,15 @@
+decouple_model:
+  _target_: eval.baselines.mkrt.safeear_decouple.decouple.SpeechTokenizer
+  n_filters: 64
+  strides: [8,5,4,2]
+  dimension: 1024
+  semantic_dimension: 768
+  bidirectional: true
+  dilation_base: 2
+  residual_kernel_size: 3
+  n_residual_layers: 1
+  lstm_layers: 2
+  activation: ELU
+  codebook_size: 1024
+  n_q: 8
+  sample_rate: 16000
