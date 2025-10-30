@@ -112,14 +112,10 @@ class Bert_Transformer_Layer(BertPreTrainedModel):
 class MMDBaseModel(nn.Module):
     def __init__(
         self,
-        config: dict,
-        mlp_flag=True,
+        config: dict
     ):
         super(MMDBaseModel, self).__init__()
         self.num_mlp = config["num_mlp"]
-        self.transformer_flag = config["transformer_flag"]
-        self.mlp_flag = mlp_flag
-        token_num = config.get("token_num", 31)
         self.mlp = nn.Sequential(
             nn.Linear(config["in_dim"], config["hid_dim"]),
             GeLU(),
@@ -127,7 +123,7 @@ class MMDBaseModel(nn.Module):
             nn.Dropout(config["dropout"]),
         )
         self.fusion_config = {
-            "hidden_size": config["in_dim"],
+            "hidden_size": config["hid_dim"],
             "num_hidden_layers": config["num_hidden_layers"],
             "num_attention_heads": 4,
             "output_attentions": True,
@@ -137,26 +133,22 @@ class MMDBaseModel(nn.Module):
         }
         if self.num_mlp > 0:
             self.mlp2 = nn.ModuleList([mlp_meta(config) for _ in range(self.num_mlp)])
-        if self.transformer_flag:
-            self.transformer = Bert_Transformer_Layer(self.fusion_config)
-        self.feature = nn.Linear(config["hid_dim"] * token_num, config["out_dim"])
+        self.transformer = Bert_Transformer_Layer(self.fusion_config)
+        self.out_proj = nn.Linear(config["hid_dim"] * config["token_num"], config["out_dim"])
 
     def forward(self, features):
         """
         input: [batch, token_num, hidden_size], output: [batch, token_num * config.out_dim]
         """
 
-        if self.transformer_flag:
-            features, _ = self.transformer(features)
-        if self.mlp_flag:
-            features = self.mlp(features)
+        features, _ = self.transformer(features)
+        features = self.mlp(features)
 
         if self.num_mlp > 0:
-            for _ in range(1):
-                for mlp in self.mlp2:
-                    features = mlp(features)
+            for mlp in self.mlp2:
+                features = mlp(features)
 
-        features = self.feature(features.view(features.shape[0], -1))
+        features = self.out_proj(features.view(features.shape[0], -1))
         return features
     
 

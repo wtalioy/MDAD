@@ -33,10 +33,6 @@ class MKRT(Baseline):
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
     def _init_train(self, args: dict):
-        self.net.sigma.requires_grad = True
-        self.net.sigma0_u.requires_grad = True
-        self.net.raw_ep.requires_grad = True
-        
         param_groups = [
             {
                 'params': self.net.basemodel.parameters(),
@@ -46,8 +42,13 @@ class MKRT(Baseline):
             {
                 'params': [self.net.sigma, self.net.sigma0_u],
                 'lr': args['mmd_lr'],
-                'weight_decay': args['mmd_wd'],
-            }
+                'weight_decay': 0,
+            },
+            {
+                'params': [self.net.raw_ep],
+                'lr': args['mmd_lr'] * 0.1,
+                'weight_decay': 0,
+            },
         ]
         self.optimizer = torch.optim.Adam(param_groups)
         
@@ -88,6 +89,10 @@ class MKRT(Baseline):
 
         with tqdm(total=len(loader), desc="Training") as pbar:
             for fea_real_sample, fea_fake_sample in loader:
+                if fea_real_sample.size(0) == 1 or fea_fake_sample.size(0) == 1:
+                    # only happens when the size of the last batch is 1
+                    continue
+
                 inputs = torch.cat([fea_real_sample, fea_fake_sample], dim=0)
                 outputs = self.net(inputs)
 
