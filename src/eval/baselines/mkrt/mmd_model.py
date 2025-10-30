@@ -141,8 +141,8 @@ class MMDBaseModel(nn.Module):
         input: [batch, token_num, hidden_size], output: [batch, token_num * config.out_dim]
         """
 
-        features, _ = self.transformer(features)
         features = self.mlp(features)
+        features, _ = self.transformer(features)
 
         if self.num_mlp > 0:
             for mlp in self.mlp2:
