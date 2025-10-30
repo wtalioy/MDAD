@@ -17,7 +17,7 @@ class SafeEarExtractor:
         
         speechtokenizer_path = download_from_url(
             url="https://cloud.tsinghua.edu.cn/f/413a0cd2e6f749eea956/?dl=1",
-            save_dir=os.path.join(os.path.dirname(__file__), "cache"),
+            save_dir=os.path.join(os.path.dirname(__file__), "safeear_decouple"),
             filename="SpeechTokenizer.pt"
         )
         self.model.load_state_dict(torch.load(speechtokenizer_path, map_location=device))
