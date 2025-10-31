@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 import os
+import yaml
 
 
 class CONV(nn.Module):
@@ -150,8 +151,36 @@ class Residual_block(nn.Module):
         return out
 
 
-import yaml
-from importlib import import_module
+class AASISTFeatureExtractorModel(nn.Module):
+    def __init__(self, d_args):
+        super().__init__()
+
+        self.d_args = d_args
+        filts = d_args["filts"]
+        
+        self.conv_time = CONV(out_channels=filts[0],
+                              kernel_size=d_args["first_conv"],
+                              in_channels=1)
+        self.first_bn = nn.BatchNorm2d(num_features=1)
+        self.selu = nn.SELU(inplace=True)
+
+        self.encoder = nn.Sequential(
+            nn.Sequential(Residual_block(nb_filts=filts[1], first=True)),
+            nn.Sequential(Residual_block(nb_filts=filts[2])),
+            nn.Sequential(Residual_block(nb_filts=filts[3])),
+            nn.Sequential(Residual_block(nb_filts=filts[4])),
+            nn.Sequential(Residual_block(nb_filts=filts[4])),
+            nn.Sequential(Residual_block(nb_filts=filts[4])))
+
+    def forward(self, x, Freq_aug=False):
+        x = x.unsqueeze(1)
+        x = self.conv_time(x, mask=Freq_aug)
+        x = x.unsqueeze(dim=1)
+        x = F.max_pool2d(torch.abs(x), (3, 3))
+        x = self.first_bn(x)
+        x = self.selu(x)
+        e = self.encoder(x)
+        return e
 
 
 class AASISTExtractor(nn.Module):
@@ -163,18 +192,11 @@ class AASISTExtractor(nn.Module):
         with open(aasist_config_path, "r") as f:
             aasist_config = yaml.load(f, Loader=yaml.FullLoader)
         
-        module = import_module("..models.{}".format(aasist_config["architecture"]), __name__)
-        _model = getattr(module, "Model")
-        aasist_model = _model(aasist_config).to(self.device)
+        self.model = AASISTFeatureExtractorModel(aasist_config).to(self.device)
         
         aasist_ckpt_path = os.path.join(os.path.dirname(__file__), "..", "aasist", "ckpts", "AASIST.pth")
-        aasist_model.load_state_dict(torch.load(aasist_ckpt_path, map_location=device))
-        aasist_model.eval()
-
-        self.conv_time = aasist_model.conv_time
-        self.first_bn = aasist_model.first_bn
-        self.selu = aasist_model.selu
-        self.encoder = aasist_model.encoder
+        self.model.load_state_dict(torch.load(aasist_ckpt_path, map_location=device), strict=False)
+        self.model.eval()
 
     @torch.inference_mode()
     def __call__(
@@ -239,13 +261,7 @@ class AASISTExtractor(nn.Module):
         return feature_list
 
     def forward(self, x, Freq_aug=False):
-        x = x.unsqueeze(1)
-        x = self.conv_time(x, mask=Freq_aug)
-        x = x.unsqueeze(dim=1)
-        x = F.max_pool2d(torch.abs(x), (3, 3))
-        x = self.first_bn(x)
-        x = self.selu(x)
-        e = self.encoder(x)
+        e = self.model(x, Freq_aug=Freq_aug)
         
         e = e.permute(0, 3, 1, 2).contiguous()
         e = e.view(e.size(0), e.size(1), -1)
