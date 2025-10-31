@@ -15,7 +15,7 @@ from scipy.stats import combine_pvalues
 from ..base import Baseline
 from .mmd_model import MMDModel
 from .mmd_utils import MMD_3_Sample_Test, MMDu
-from .safeear_extractor import SafeEarExtractor
+from .aasist_extractor import AASISTExtractor
 from ...config import Label
 
 class MKRT(Baseline):
@@ -27,7 +27,7 @@ class MKRT(Baseline):
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.extractor = SafeEarExtractor()
+        self.extractor = AASISTExtractor(device=device)
         self.net = MMDModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
     def _init_train(self, args: dict):
