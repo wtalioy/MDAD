@@ -125,7 +125,7 @@ class MMDBaseModel(nn.Module):
         self.fusion_config = {
             "hidden_size": config["hid_dim"],
             "num_hidden_layers": config["num_hidden_layers"],
-            "num_attention_heads": 4,
+            "num_attention_heads": config["num_attention_heads"],
             "output_attentions": True,
             "output_hidden_states": False,
             "return_dict": False,
@@ -150,60 +150,3 @@ class MMDBaseModel(nn.Module):
 
         features = self.out_proj(features.view(features.shape[0], -1))
         return features
-    
-
-class MMDModel:
-    def __init__(self, config: dict, device: str):
-        self.sigma = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
-        self.sigma0_u = nn.Parameter(torch.tensor(1.0, dtype=torch.float, device=device))
-        self.raw_ep = nn.Parameter(torch.tensor(0.0, dtype=torch.float, device=device))
-
-        self.coeff_xy = config.get("coeff_xy", 2)
-        self.is_yy_zero = config.get("is_yy_zero", False)
-        self.is_xx_zero = config.get("is_xx_zero", False)
-
-        self.device = device
-        self.basemodel = MMDBaseModel(config=config).to(device)
-
-    def load_state_dict(self, ckpt_path: str):
-        """Load a trained model from checkpoint."""
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
-        state_dict = checkpoint["net"]
-
-        # Remove "module." prefix if it exists
-        new_state_dict = {}
-        for key, value in state_dict.items():
-            if key.startswith("module."):
-                new_key = key[7:]
-                new_state_dict[new_key] = value
-            else:
-                new_state_dict[key] = value
-        state_dict = new_state_dict
-            
-        with torch.no_grad():
-            self.sigma.data.fill_(checkpoint["sigma"])
-            self.sigma0_u.data.fill_(checkpoint["sigma0_u"])
-
-            # Map stored positive εₚ back to raw parameter space (inverse soft-plus)
-            ep_val = torch.tensor(checkpoint["ep"], device=self.device)
-            raw_val = torch.log(torch.exp(ep_val - 1e-6) - 1.0 + 1e-12)
-            self.raw_ep.data.copy_(raw_val)
-        
-        self.basemodel.load_state_dict(state_dict)
-
-    def save_state_dict(self, ckpt_path: str):
-        torch.save({
-            "net": self.basemodel.state_dict(),
-            "sigma": self.sigma.detach().item(),
-            "sigma0_u": self.sigma0_u.detach().item(),
-            "ep": self.ep.detach().item()
-        }, ckpt_path)
-
-        
-    @property
-    def ep(self):
-        return torch.nn.functional.softplus(self.raw_ep) + 1e-6
-
-    def __call__(self, x):
-        """Forward pass through the model."""
-        return self.basemodel(x)

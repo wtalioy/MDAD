@@ -1,15 +1,13 @@
 import random
-from typing import Union, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-import os
-import yaml
 
 
+# Reference from AASIST
 class CONV(nn.Module):
     @staticmethod
     def to_mel(hz):
@@ -151,7 +149,7 @@ class Residual_block(nn.Module):
         return out
 
 
-class AASISTFeatureExtractorModel(nn.Module):
+class Extractor(nn.Module):
     def __init__(self, d_args):
         super().__init__()
 
@@ -180,90 +178,4 @@ class AASISTFeatureExtractorModel(nn.Module):
         x = self.first_bn(x)
         x = self.selu(x)
         e = self.encoder(x)
-        return e
-
-
-class AASISTExtractor(nn.Module):
-    def __init__(self, device: str = "cuda"):
-        super().__init__()
-        self.device = device
-
-        aasist_config_path = os.path.join(os.path.dirname(__file__), "..", "aasist", "config", "AASIST.yaml")
-        with open(aasist_config_path, "r") as f:
-            aasist_config = yaml.load(f, Loader=yaml.FullLoader)
-        
-        self.model = AASISTFeatureExtractorModel(aasist_config).to(self.device)
-        
-        aasist_ckpt_path = os.path.join(os.path.dirname(__file__), "..", "aasist", "ckpts", "AASIST.pth")
-        self.model.load_state_dict(torch.load(aasist_ckpt_path, map_location=device), strict=False)
-        self.model.eval()
-
-    @torch.inference_mode()
-    def __call__(
-        self,
-        audio_batch: list[np.ndarray],
-        padding: bool = True,
-        truncation: bool = False,
-        max_length: Optional[int] = None,
-    ) -> list[torch.Tensor]:
-        processed_batch = []
-        for waveform_np in audio_batch:
-            waveform = torch.from_numpy(waveform_np).float().to(self.device)
-            if waveform.ndim == 1:
-                waveform = waveform.unsqueeze(0)
-            if waveform.shape[0] > 1:
-                waveform = torch.mean(waveform, dim=0, keepdim=True)
-
-            if truncation and max_length is not None:
-                waveform = waveform[:, :max_length]
-
-            processed_batch.append(waveform)
-
-        if not padding:
-            if len(processed_batch) > 0:
-                first_len = processed_batch[0].shape[1]
-                if not all(w.shape[1] == first_len for w in processed_batch):
-                    raise ValueError(
-                        "All samples must have the same length when padding is disabled."
-                    )
-            padded_batch = processed_batch
-        else:
-            if max_length is not None:
-                target_len = max_length
-                if not truncation and any(
-                    w.shape[1] > target_len for w in processed_batch
-                ):
-                    raise ValueError(
-                        f"Found sample with length > max_length ({target_len}), but truncation is disabled."
-                    )
-            else:
-                target_len = (
-                    max(w.shape[1] for w in processed_batch) if processed_batch else 0
-                )
-
-            padded_batch = []
-            for waveform in processed_batch:
-                padding_needed = target_len - waveform.shape[1]
-                padded_waveform = torch.nn.functional.pad(
-                    waveform, (0, padding_needed)
-                )
-                padded_batch.append(padded_waveform)
-
-        if not padded_batch:
-            return []
-            
-        batch_tensor = torch.stack(padded_batch)
-        
-        features = self.forward(batch_tensor)
-        
-        feature_list = list(torch.split(features, 1, dim=0))
-        
-        return feature_list
-
-    def forward(self, x, Freq_aug=False):
-        e = self.model(x, Freq_aug=Freq_aug)
-        
-        e = e.permute(0, 3, 1, 2).contiguous()
-        e = e.view(e.size(0), e.size(1), -1)
-        
         return e
