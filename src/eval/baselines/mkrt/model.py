@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import os
 
 from .extractor import Extractor
 from .mmd_model import MMDBaseModel
@@ -9,6 +10,8 @@ class MKRTModel(nn.Module):
         super().__init__()
         self.device = device
         self.extractor = Extractor(d_args=config["extractor"]).to(self.device)
+        raw_ckpt_path = os.path.join(os.path.dirname(__file__), "ckpts", "raw_extractor.pth")
+        self.extractor.load_state_dict(torch.load(raw_ckpt_path, map_location=device), strict=False)
         self.mmd_model = MMDBaseModel(config=config["mmd_model"]).to(device)
 
         # MMD-specific parameters
@@ -36,22 +39,20 @@ class MKRTModel(nn.Module):
         return torch.nn.functional.softplus(self.raw_ep) + 1e-6
         
     def load_from_checkpoint(self, ckpt_path: str):
-        """Load a trained model from checkpoint."""
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         
         # Load mmd_model state dict
-        state_dict = checkpoint["net"]
-        new_state_dict = {}
-        for key, value in state_dict.items():
+        net_state_dict = {}
+        for key, value in checkpoint["net"].items():
             if key.startswith("module."):
                 new_key = key[7:]
-                new_state_dict[new_key] = value
+                net_state_dict[new_key] = value
             else:
-                new_state_dict[key] = value
-        self.mmd_model.load_state_dict(new_state_dict)
+                net_state_dict[key] = value
+        self.mmd_model.load_state_dict(net_state_dict)
 
         # Load extractor state dict
-        self.extractor.load_state_dict(state_dict)
+        self.extractor.load_state_dict(checkpoint["extractor"])
 
         with torch.no_grad():
             self.sigma.data.fill_(checkpoint["sigma"])

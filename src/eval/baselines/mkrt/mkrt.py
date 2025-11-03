@@ -139,11 +139,10 @@ class MKRT(Baseline):
         batch_size = args['batch_size']
         real_loader = self._prepare_loader(train_real_data, [Label.real] * len(train_real_data), batch_size=batch_size//2)
         fake_loader = self._prepare_loader(train_fake_data, [Label.fake] * len(train_fake_data), batch_size=batch_size//2)
+        eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=64)
         args['steps_per_epoch'] = min(len(real_loader), len(fake_loader))
 
         self._auto_tune_bandwidths(train_real_data, train_fake_data)
-
-        eval_labels = np.array(eval_labels)
 
         log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
         logger.info(f"Training MKRT on {dataset_name}")
@@ -162,7 +161,7 @@ class MKRT(Baseline):
             self._train_epoch(epoch, real_loader, fake_loader)
             if epoch % args['eval_interval'] == 0 and epoch > 0:
                 self._precompute_ref_cache(ref_real_data, ref_fake_data)
-                eer = self._evaluate_eer(data=eval_data, labels=eval_labels, sr=sr)
+                eer = self._evaluate_eer(eval_loader, sr=sr)
                 logger.info(f"Epoch {epoch} EER: {100*eer:.2f}%")
                 if eer < best_eer:
                     best_eer = eer
@@ -216,8 +215,8 @@ class MKRT(Baseline):
         for audio, _ in real_loader:
             audio = audio.to(self.device)
             feas, net = self.model(audio)
-            all_real_feas.append(feas.cpu())
-            all_real_net.append(net.cpu())
+            all_real_feas.append(feas)
+            all_real_net.append(net)
 
         # for fake
         fake_loader = self._prepare_loader(fake_data, [Label.fake]*len(fake_data), batch_size=32, shuffle=False, drop_last=False)
@@ -226,14 +225,14 @@ class MKRT(Baseline):
         for audio, _ in fake_loader:
             audio = audio.to(self.device)
             feas, net = self.model(audio)
-            all_fake_feas.append(feas.cpu())
-            all_fake_net.append(net.cpu())
+            all_fake_feas.append(feas)
+            all_fake_net.append(net)
 
         self._ref_cache = {
-            "fea_real": torch.cat(all_real_feas).to(self.device),
-            "net_real": torch.cat(all_real_net).to(self.device),
-            "fea_fake": torch.cat(all_fake_feas).to(self.device),
-            "net_fake": torch.cat(all_fake_net).to(self.device),
+            "fea_real": torch.cat(all_real_feas),
+            "net_real": torch.cat(all_real_net),
+            "fea_fake": torch.cat(all_fake_feas),
+            "net_fake": torch.cat(all_fake_net),
         }
 
     def evaluate(
@@ -328,8 +327,8 @@ class MKRT(Baseline):
                 fea_fake = self._ref_cache["fea_fake"]
                 net_fake = self._ref_cache["net_fake"]
 
-                idx_real = torch.randperm(len(fea_real))
-                idx_fake = torch.randperm(len(fea_fake))
+                idx_real = torch.randperm(len(fea_real), device=fea_real.device)
+                idx_fake = torch.randperm(len(fea_fake), device=fea_fake.device)
                 fea_real = fea_real[idx_real]
                 fea_fake = fea_fake[idx_fake]
                 net_real = net_real[idx_real]
@@ -403,8 +402,8 @@ class MKRT(Baseline):
             for audio, _ in loader:
                 audio = audio.to(self.device)
                 feas, hidden = self.model(audio)
-                all_feas.append(feas.cpu())
-                all_hidden.append(hidden.cpu())
+                all_feas.append(feas)
+                all_hidden.append(hidden)
             
             feas = torch.cat(all_feas)
             hidden = torch.cat(all_hidden)

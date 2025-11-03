@@ -14,7 +14,7 @@ mmd_model:
   num_attention_heads: 4
   num_mlp: 1
   in_dim: 1472
-  token_num: 27
+  token_num: 29
   hid_dim: 512
   out_dim: 300
   dropout: 0.4
