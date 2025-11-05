@@ -2,49 +2,91 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .base import BaseExperiment
-from .config import CrossLanguageExperimentConfig, LanguageConfig
+from .config import CrossLanguageExperimentConfig, ExperimentConfig, LanguageConfig
 
 if TYPE_CHECKING:
     from .runner import ExperimentRunner
 
 __all__ = ["Experiment4"]
 
-_CONFIG = CrossLanguageExperimentConfig(
+# Dataset definitions
+_EN_DATASETS = [
+    "audiobook", "emotional", "interview", "movie",
+    "podcast", "publicfigure", "publicspeech", "phonecall",
+]
+_ZH_DATASETS = ["news", "phonecall"]
+_COMBINED_DATASETS = [
+    "audiobook", "emotional", "interview", "movie",
+    "podcast", "publicfigure", "publicspeech", "phonecall", "news",
+]
+
+# Cross-language generalization: separate models per language
+_CONFIG_SEPARATE = CrossLanguageExperimentConfig(
     languages=[
         LanguageConfig(
             name="en",
-            train_datasets=[
-                "audiobook", "emotional", "interview", "movie", "podcast",
-                "publicfigure", "publicspeech", "phonecall",
-            ],
-            val_datasets=[
-                "audiobook", "emotional", "interview", "movie", "podcast",
-                "publicfigure", "publicspeech", "phonecall",
-            ],
+            train_datasets=_EN_DATASETS,
+            val_datasets=_EN_DATASETS,
             subset="en",
         ),
         LanguageConfig(
             name="zh",
-            train_datasets=["news", "phonecall"],
-            val_datasets=["news", "phonecall"],
+            train_datasets=_ZH_DATASETS,
+            val_datasets=_ZH_DATASETS,
             subset="zh-cn",
         ),
     ],
     test_sets={
-        "en": [
-            "audiobook", "emotional", "interview", "movie", "podcast",
-            "publicfigure", "publicspeech", "phonecall",
-        ],
-        "zh": ["news", "phonecall"],
+        "en": _EN_DATASETS,
+        "zh": _ZH_DATASETS,
     },
+)
+
+# Combined EN+ZH model tested on EN
+_CONFIG_COMBINED_EN = ExperimentConfig(
+    train_datasets=_COMBINED_DATASETS,
+    val_datasets=_COMBINED_DATASETS,
+    test_sets={"en": _EN_DATASETS},
+    subset=None,
+)
+
+# Combined EN+ZH model tested on ZH
+_CONFIG_COMBINED_ZH = ExperimentConfig(
+    train_datasets=_COMBINED_DATASETS,
+    val_datasets=_COMBINED_DATASETS,
+    test_sets={"zh": _ZH_DATASETS},
+    subset=None,
 )
 
 
 class Experiment4(BaseExperiment):
-    """Cross-Language Generalization Test."""
+    """Cross-Language Generalization Test.
+    
+    Tests three scenarios:
+    1. Separate models per language (trained on EN, trained on ZH)
+    2. Combined multilingual model tested on EN
+    3. Combined multilingual model tested on ZH
+    """
 
     name = "expr4"
 
     @classmethod
     def run(cls, runner: ExperimentRunner) -> dict[str, Any]:
-        return runner._run_cross_language_experiment(cls.name, _CONFIG)
+        results = {}
+        
+        # Scenario 1: Separate models per language
+        results["separate_models"] = runner._run_cross_language_experiment(
+            f"{cls.name}_separate", _CONFIG_SEPARATE
+        )
+        
+        # Scenario 2: Combined model tested on EN
+        results["combined_test_en"] = runner._run_experiment(
+            f"{cls.name}_combined_en", _CONFIG_COMBINED_EN
+        )
+        
+        # Scenario 3: Combined model tested on ZH
+        results["combined_test_zh"] = runner._run_experiment(
+            f"{cls.name}_combined_zh", _CONFIG_COMBINED_ZH
+        )
+        
+        return results
