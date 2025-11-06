@@ -12,6 +12,7 @@ from sklearn.metrics import roc_curve, roc_auc_score
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 
+from .models.AASIST import Model
 from .utils import create_optimizer
 
 from ..base import Baseline
@@ -23,14 +24,8 @@ class AASIST_Base(Baseline):
         self.name = model_name
         self.default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{model_name}.pth")
         model_args = self._load_model_config(os.path.dirname(__file__), model_name)
-        self.model = self._load_model(model_args)
+        self.model = Model(model_args).to(self.device)
         self.supported_metrics = ['eer', 'tdcf', 'auroc']
-
-    def _load_model(self, config: dict):
-        module = import_module(".models.{}".format(config["architecture"]))
-        _model = getattr(module, "Model")
-        model = _model(config).to(self.device)
-        return model
 
     @torch.no_grad()
     def _evaluate_eer(self, eval_loader: DataLoader) -> float:
