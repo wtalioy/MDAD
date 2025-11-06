@@ -29,12 +29,24 @@ class MKRT(Baseline):
         self.model = MKRTModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
     def _init_train(self, args: dict):
-        param_groups = [
-            {
-                'params': self.model.extractor.parameters(),
-                'lr': args['extractor_lr'],
-                'weight_decay': args['extractor_wd'],
-            },
+        self.finetune_extractor = args['finetune_extractor']
+        if self.finetune_extractor:
+            for param in self.model.extractor.parameters():
+                param.requires_grad = True
+        else:
+            for param in self.model.extractor.parameters():
+                param.requires_grad = False
+
+        param_groups = []
+        if self.finetune_extractor:
+            param_groups.append(
+                {
+                    'params': self.model.extractor.parameters(),
+                    'lr': args['extractor_lr'],
+                    'weight_decay': args['extractor_wd'],
+                }
+            )
+        param_groups.extend([
             {
                 'params': self.model.mmd_model.parameters(),
                 'lr': args['basemodel_lr'],
@@ -50,7 +62,7 @@ class MKRT(Baseline):
                 'lr': args['mmd_lr'] * 0.1,
                 'weight_decay': 0,
             },
-        ]
+        ])
         self.optimizer = torch.optim.Adam(param_groups)
         
         total_steps = args['num_epoch'] * args['steps_per_epoch']
@@ -123,6 +135,7 @@ class MKRT(Baseline):
         ref_data: Optional[List[np.ndarray]] = None,
         ref_labels: Optional[List[Label]] = None,
         sr: int = 16000,
+        finetune_extractor: bool = True,
     ):
         if ref_data is None or ref_labels is None:
             raise ValueError(f"{self.name} requires ref_data and ref_labels to be provided")
@@ -132,14 +145,15 @@ class MKRT(Baseline):
         self.ref_labels = ref_labels
         
         args = self._load_train_config(os.path.dirname(__file__), dataset_name)
+        args['finetune_extractor'] = finetune_extractor
         
         ref_real_data, ref_fake_data = self._split_data(ref_data, ref_labels)
         train_real_data, train_fake_data = self._split_data(train_data, train_labels)
 
         batch_size = args['batch_size']
-        real_loader = self._prepare_loader(train_real_data, [Label.real] * len(train_real_data), batch_size=batch_size//2)
-        fake_loader = self._prepare_loader(train_fake_data, [Label.fake] * len(train_fake_data), batch_size=batch_size//2)
-        eval_loader = self._prepare_loader(eval_data, eval_labels, shuffle=False, drop_last=False, batch_size=64)
+        real_loader = self._prepare_loader(train_real_data, [Label.real] * len(train_real_data), max_len=64600, batch_size=batch_size//2)
+        fake_loader = self._prepare_loader(train_fake_data, [Label.fake] * len(train_fake_data), max_len=64600, batch_size=batch_size//2)
+        eval_loader = self._prepare_loader(eval_data, eval_labels, max_len=64600, shuffle=False, drop_last=False, batch_size=64)
         args['steps_per_epoch'] = min(len(real_loader), len(fake_loader))
 
         self._auto_tune_bandwidths(train_real_data, train_fake_data)
@@ -209,7 +223,7 @@ class MKRT(Baseline):
         self.model.eval()
         
         # for real
-        real_loader = self._prepare_loader(real_data, [Label.real]*len(real_data), batch_size=32, shuffle=False, drop_last=False)
+        real_loader = self._prepare_loader(real_data, [Label.real]*len(real_data), max_len=64600, batch_size=32, shuffle=False, drop_last=False)
         all_real_feas = []
         all_real_net = []
         for audio, _ in real_loader:
@@ -219,7 +233,7 @@ class MKRT(Baseline):
             all_real_net.append(net)
 
         # for fake
-        fake_loader = self._prepare_loader(fake_data, [Label.fake]*len(fake_data), batch_size=32, shuffle=False, drop_last=False)
+        fake_loader = self._prepare_loader(fake_data, [Label.fake]*len(fake_data), max_len=64600, batch_size=32, shuffle=False, drop_last=False)
         all_fake_feas = []
         all_fake_net = []
         for audio, _ in fake_loader:
@@ -257,7 +271,7 @@ class MKRT(Baseline):
                 train_real_data, train_fake_data = train_real_data[self.ref_num:], train_fake_data[self.ref_num:]
                 train_data, train_labels = self._aggregate_data(train_real_data, train_fake_data)
                 eval_data, eval_labels = self._aggregate_data(*self._load_default(split="validation", limit=768))
-                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name="default", ref_data=ref_data, ref_labels=ref_labels, sr=sr)
+                self.train(train_data, train_labels, eval_data, eval_labels, dataset_name="default", ref_data=ref_data, ref_labels=ref_labels, sr=sr, finetune_extractor=False)
         else:
             default_ckpt = os.path.join(os.path.dirname(__file__), "ckpts", f"{dataset_name}_best.pt")
 
@@ -271,7 +285,7 @@ class MKRT(Baseline):
 
         if Label.real != 1:
             labels = [1 - label for label in labels]
-        eval_loader = self._prepare_loader(data, labels, shuffle=False, drop_last=False, batch_size=64)
+        eval_loader = self._prepare_loader(data, labels, max_len=64600, shuffle=False, drop_last=False, batch_size=64)
 
         results = {}
         for metric in metrics:
@@ -395,7 +409,7 @@ class MKRT(Baseline):
             else:
                 sampled_data = all_data
 
-            loader = self._prepare_loader(sampled_data, [Label.real]*len(sampled_data), batch_size=32, shuffle=False, drop_last=False)
+            loader = self._prepare_loader(sampled_data, [Label.real]*len(sampled_data), max_len=64600, batch_size=32, shuffle=False, drop_last=False)
             
             all_feas = []
             all_hidden = []

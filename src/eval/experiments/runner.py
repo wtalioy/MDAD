@@ -85,7 +85,7 @@ class ExperimentRunner:
         baseline = BASELINE_MAP[baseline_name](device=self.device)
         ref_data, ref_labels = None, None
         if baseline.name == "MKRT":
-            ref_num = baseline.ref_num
+            ref_num = baseline.ref_num * 2
             if len(train_data) >= ref_num:
                 ref_data, ref_labels = train_data[:ref_num], train_labels[:ref_num]
                 train_data, train_labels = train_data[ref_num:], train_labels[ref_num:]
