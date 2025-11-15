@@ -1,4 +1,4 @@
-from .base import BaseDataset
+from .base import BaseSubset
 from .publicfigure import PublicFigure
 from .news import News
 from .podcast import Podcast
@@ -10,10 +10,8 @@ from .interview import Interview
 from .publicspeech import PublicSpeech
 from .movie import Movie
 from .emotional import Emotional
-from .asvspoof2021 import ASVspoof2021
-from .in_the_wild import InTheWild
 
-DATASET_MAP = {
+SUBSET_MAP = {
     "publicfigure": PublicFigure,
     "news": News,
     "podcast": Podcast,
@@ -25,8 +23,6 @@ DATASET_MAP = {
     "publicspeech": PublicSpeech,
     "movie": Movie,
     "emotional": Emotional,
-    "asvspoof2021": ASVspoof2021,
-    "in-the-wild": InTheWild,
 }
 
-__all__ = ["BaseDataset", "DATASET_MAP"]
+__all__ = ["BaseSubset", "SUBSET_MAP"]

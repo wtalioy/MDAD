@@ -10,15 +10,15 @@ if TYPE_CHECKING:
 __all__ = ["Test2"]
 
 _CONFIG = TestConfig(
-    train_datasets=[
+    train_subsets=[
         "audiobook", "interview", "movie", "news", "phonecall",
         "podcast", "publicfigure", "publicspeech",
     ],
-    val_datasets=[
+    val_subsets=[
         "audiobook", "interview", "movie", "news", "phonecall",
         "podcast", "publicfigure", "publicspeech",
     ],
-    test_sets={"Neutral": ["audiobook", "podcast"], "Emotional": ["emotional"]},
+    test_subsets={"Neutral": ["audiobook", "podcast"], "Emotional": ["emotional"]},
 )
 
 

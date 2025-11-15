@@ -9,7 +9,7 @@ import random
 from loguru import logger
 
 from ..baselines import BASELINE_MAP
-from ..mdad_datasets import DATASET_MAP
+from ..subsets import SUBSET_MAP
 from . import CrossLanguageTestConfig, TestConfig
 
 __all__ = ["TestRunner"]
@@ -21,39 +21,39 @@ class TestRunner:
         self.device = device
         self.results: dict[str, Any] = {}
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._dataset_cache: Dict[Tuple[str, str | None], Any] = {}
+        self._subset_cache: Dict[Tuple[str, str | None], Any] = {}
 
         os.makedirs("logs", exist_ok=True)
         os.makedirs("results", exist_ok=True)
         log_file = f"logs/test_{self.timestamp}.log"
         logger.add(log_file, rotation="20 MB", retention="30 days")
 
-    def _create_combined_dataset(
-        self, dataset_names: List[str], split: str, subset: str | None = None, shuffle: bool = True, limit: int | None = None
+    def _create_combined_subset(
+        self, subset_names: List[str], split: str, subset: str | None = None, shuffle: bool = True, limit: int | None = None
     ) -> Tuple[List[Any], List[Any]]:
-        """Combine multiple datasets for a specific split, using a cache."""
+        """Combine multiple subsets for a specific split, using a cache."""
 
-        def _get_dataset(name: str, subset: str | None):
+        def _get_subset(name: str, subset: str | None):
             key = (name, subset)
-            if key not in self._dataset_cache:
+            if key not in self._subset_cache:
                 kwargs = {"data_dir": self.data_dir}
                 if name == "phonecall" and subset is not None:
                     kwargs["subset"] = subset
-                self._dataset_cache[key] = DATASET_MAP[name](**kwargs)
-            return self._dataset_cache[key]
+                self._subset_cache[key] = SUBSET_MAP[name](**kwargs)
+            return self._subset_cache[key]
 
         combined_data: List[Any] = []
         combined_labels: List[Any] = []
 
-        for ds_name in dataset_names:
-            ds = _get_dataset(ds_name, subset if ds_name == "phonecall" else None)
-            split_data = ds.data.get(split, [])
+        for subset_name in subset_names:
+            subset = _get_subset(subset_name, subset if subset_name == "phonecall" else None)
+            split_data = subset.data.get(split, [])
             if not split_data:
                 continue
 
             combined_data.extend(split_data)
-            combined_labels.extend(ds.labels[split])
-            logger.info(f"Added {len(split_data)} samples from {ds_name} {split}")
+            combined_labels.extend(subset.labels[split])
+            logger.info(f"Added {len(split_data)} samples from {subset_name} {split}")
 
         if shuffle:
             random.seed(34)
@@ -65,21 +65,21 @@ class TestRunner:
             combined_data = combined_data[:limit]
             combined_labels = combined_labels[:limit]
 
-        logger.info(f"Combined {split}: {len(combined_data)} total samples from {len(dataset_names)} datasets")
+        logger.info(f"Combined {split}: {len(combined_data)} total samples from {len(subset_names)} subsets")
         return combined_data, combined_labels
 
     def _train_model(
-        self, train_datasets: List[str], val_datasets: List[str], expr_name: str, subset: str | None, baseline_name: str
+        self, train_subsets: List[str], val_subsets: List[str], expr_name: str, subset: str | None, baseline_name: str
     ) -> Any:
-        """Train a model on specified datasets."""
+        """Train a model on specified subsets."""
         logger.info(f"Starting training for test {expr_name}")
-        logger.info(f"Training {baseline_name} on {train_datasets}")
+        logger.info(f"Training {baseline_name} on {train_subsets}")
 
-        train_data, train_labels = self._create_combined_dataset(train_datasets, "train", subset)
-        val_data, val_labels = self._create_combined_dataset(val_datasets, "dev", subset, shuffle=False)
+        train_data, train_labels = self._create_combined_subset(train_subsets, "train", subset)
+        val_data, val_labels = self._create_combined_subset(val_subsets, "dev", subset, shuffle=False)
 
         if not train_data:
-            logger.warning(f"No training data found for {train_datasets}")
+            logger.warning(f"No training data found for {train_subsets}")
             return None
 
         baseline = BASELINE_MAP[baseline_name](device=self.device)
@@ -106,22 +106,22 @@ class TestRunner:
         return baseline
 
     def _evaluate_model(
-        self, baseline: Any, test_datasets: List[str], expr_name: str, subset: str | None, baseline_name: str
+        self, baseline: Any, test_subsets: List[str], expr_name: str, subset: str | None, baseline_name: str
     ) -> Dict[str, float]:
         """Evaluate a trained model on test datasets."""
         if baseline is None:
             return {"eer": float("inf")}
 
         logger.info(f"Start evaluation for test {expr_name}")
-        logger.info(f"Evaluating {baseline_name} on {test_datasets}")
+        logger.info(f"Evaluating {baseline_name} on {test_subsets}")
 
-        if len(test_datasets) == 1 and test_datasets[0] in ["partialfake", "noisyspeech"]:
-            dataset = DATASET_MAP[test_datasets[0]](data_dir=self.data_dir)
-            return dataset.evaluate(baseline, ["eer"], in_domain=True, expr_name=expr_name)
+        if len(test_subsets) == 1 and test_subsets[0] in ["partialfake", "noisyspeech"]:
+            subset = SUBSET_MAP[test_subsets[0]](data_dir=self.data_dir)
+            return subset.evaluate(baseline, ["eer"], in_domain=True, expr_name=expr_name)
 
-        test_data, test_labels = self._create_combined_dataset(test_datasets, "test", subset, shuffle=False)
+        test_data, test_labels = self._create_combined_subset(test_subsets, "test", subset, shuffle=False)
         if not test_data:
-            logger.warning(f"No test data found for {test_datasets}")
+            logger.warning(f"No test data found for {test_subsets}")
             return {"eer": float("inf")}
 
         return baseline.evaluate(
@@ -136,8 +136,8 @@ class TestRunner:
         for baseline_name in self.baseline_names:
             logger.info(f"  -> Baseline: {baseline_name}")
             model = self._train_model(
-                train_datasets=config.train_datasets,
-                val_datasets=config.val_datasets,
+                train_subsets=config.train_subsets,
+                val_subsets=config.val_subsets,
                 expr_name=name,
                 subset=config.subset,
                 baseline_name=baseline_name,
@@ -146,12 +146,12 @@ class TestRunner:
             baseline_results: dict[str, Any] = {
                 test_name: self._evaluate_model(
                     baseline=model,
-                    test_datasets=datasets,
+                    test_subsets=subsets,
                     expr_name=name,
                     subset=config.subset,
                     baseline_name=baseline_name,
                 )
-                for test_name, datasets in config.test_sets.items()
+                for test_name, subsets in config.test_subsets.items()
             }
             test_results[baseline_name] = baseline_results
 
@@ -169,8 +169,8 @@ class TestRunner:
 
             language_models = {
                 lang_cfg.name: self._train_model(
-                    train_datasets=lang_cfg.train_datasets,
-                    val_datasets=lang_cfg.val_datasets,
+                    train_subsets=lang_cfg.train_subsets,
+                    val_subsets=lang_cfg.val_subsets,
                     expr_name=f"{name}_{lang_cfg.name}",
                     subset=lang_cfg.subset,
                     baseline_name=baseline_name,
@@ -183,12 +183,12 @@ class TestRunner:
                 results_for_model = {
                     test_lang: self._evaluate_model(
                         baseline=model,
-                        test_datasets=datasets,
+                        test_subsets=subsets,
                         expr_name=f"{name}_{model_lang}",
                         subset=next((lc.subset for lc in config.languages if lc.name == test_lang), None),
                         baseline_name=baseline_name,
                     )
-                    for test_lang, datasets in config.test_sets.items()
+                    for test_lang, subsets in config.test_subsets.items()
                 }
                 baseline_results[f"model_{model_lang}"] = results_for_model
             exp_results[baseline_name] = baseline_results

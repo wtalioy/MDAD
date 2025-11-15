@@ -1,4 +1,4 @@
-from .base import BaseRawDataset
+from .base import BaseRawSubset
 from .news import News
 from .podcast import Podcast
 from .movie import Movie
@@ -8,7 +8,7 @@ from .publicspeech import PublicSpeech
 from .partialfake import PartialFake
 from .noisyspeech import NoisySpeech
 
-RAWDATASET_MAP = {
+RAW_SUBSET_MAP = {
     "news": News,
     "podcast": Podcast,
     "movie": Movie,
@@ -19,4 +19,4 @@ RAWDATASET_MAP = {
     "noisyspeech": NoisySpeech,
 }
 
-__all__ = ["BaseRawDataset", "RAWDATASET_MAP"]
+__all__ = ["BaseRawSubset", "RAW_SUBSET_MAP"]

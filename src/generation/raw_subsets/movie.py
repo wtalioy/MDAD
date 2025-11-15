@@ -1,9 +1,9 @@
 from typing import List
 import os
 from ..models import BaseTTS, BaseVC
-from .base import BaseRawDataset
+from .base import BaseRawSubset
 
-class Movie(BaseRawDataset):
+class Movie(BaseRawSubset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "Movie"), *args, **kwargs)
 

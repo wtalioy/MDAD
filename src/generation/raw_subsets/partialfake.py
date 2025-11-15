@@ -1,4 +1,4 @@
-from .base import BaseRawDataset
+from .base import BaseRawSubset
 import os
 import json
 import random
@@ -11,7 +11,7 @@ from typing import List
 from ..models import BaseTTS, BaseVC
 from ..transcription.parakeet import Parakeet
 
-class PartialFake(BaseRawDataset):
+class PartialFake(BaseRawSubset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "PartialFake"), *args, **kwargs)
         self.data_sources = ["Interview", "Podcast", "PublicSpeech"]

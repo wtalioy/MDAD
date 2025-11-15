@@ -11,9 +11,9 @@ __all__ = ["Test1"]
 
 
 _CONFIG = TestConfig(
-    train_datasets=["audiobook", "news"],
-    val_datasets=["audiobook", "news"],
-    test_sets={
+    train_subsets=["audiobook", "news"],
+    val_subsets=["audiobook", "news"],
+    test_subsets={
         "InDomain": ["audiobook", "news"],
         "Spontaneous": ["interview", "podcast", "phonecall"],
         "RealWorld": ["movie", "publicfigure", "publicspeech"],

@@ -11,9 +11,9 @@ from tqdm import tqdm
 from ..baselines import Baseline
 from ..config import Label
 
-class BaseDataset:
+class BaseSubset:
     def __init__(self, data_dir: Optional[str] = None, *args, **kwargs):
-        self.name = "BaseDataset"
+        self.name = "BaseSubset"
         self.data_dir = data_dir
         self.splits = ['train', 'dev', 'test']
         self.sr = 16000

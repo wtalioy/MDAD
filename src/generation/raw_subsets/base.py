@@ -6,7 +6,7 @@ from loguru import logger
 from tqdm import tqdm
 import soundfile as sf
 
-class BaseRawDataset:
+class BaseRawSubset:
     def __init__(self, data_dir: str, *args, **kwargs):
         self.data_dir = data_dir
         self.meta_path = os.path.join(self.data_dir, "meta.json")

@@ -1,11 +1,11 @@
-from .base import BaseRawDataset
+from .base import BaseRawSubset
 import os
 import json
 from pydub import AudioSegment
 import random
 from tqdm import tqdm
 
-class NoisySpeech(BaseRawDataset):
+class NoisySpeech(BaseRawSubset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "NoisySpeech"), *args, **kwargs)
         data_sources = ["News", "Interview", "Podcast", "PublicSpeech", "Audiobook", "Movie", "PhoneCall"]

@@ -10,12 +10,12 @@ if TYPE_CHECKING:
 __all__ = ["Test4"]
 
 # Dataset definitions
-_EN_DATASETS = [
+_EN_SUBSETS = [
     "audiobook", "emotional", "interview", "movie",
     "podcast", "publicfigure", "publicspeech", "phonecall",
 ]
-_ZH_DATASETS = ["news", "phonecall"]
-_COMBINED_DATASETS = [
+_ZH_SUBSETS = ["news", "phonecall"]
+_COMBINED_SUBSETS = [
     "audiobook", "emotional", "interview", "movie",
     "podcast", "publicfigure", "publicspeech", "phonecall", "news",
 ]
@@ -25,36 +25,36 @@ _CONFIG_SEPARATE = CrossLanguageTestConfig(
     languages=[
         LanguageConfig(
             name="en",
-            train_datasets=_EN_DATASETS,
-            val_datasets=_EN_DATASETS,
+            train_subsets=_EN_SUBSETS,
+            val_subsets=_EN_SUBSETS,
             subset="en",
         ),
         LanguageConfig(
             name="zh",
-            train_datasets=_ZH_DATASETS,
-            val_datasets=_ZH_DATASETS,
+            train_subsets=_ZH_SUBSETS,
+            val_subsets=_ZH_SUBSETS,
             subset="zh-cn",
         ),
     ],
-    test_sets={
-        "en": _EN_DATASETS,
-        "zh": _ZH_DATASETS,
+    test_subsets={
+        "en": _EN_SUBSETS,
+        "zh": _ZH_SUBSETS,
     },
 )
 
 # Combined EN+ZH model tested on EN
 _CONFIG_COMBINED_EN = TestConfig(
-    train_datasets=_COMBINED_DATASETS,
-    val_datasets=_COMBINED_DATASETS,
-    test_sets={"en": _EN_DATASETS},
+    train_subsets=_COMBINED_SUBSETS,
+    val_subsets=_COMBINED_SUBSETS,
+    test_subsets={"en": _EN_SUBSETS},
     subset=None,
 )
 
 # Combined EN+ZH model tested on ZH
 _CONFIG_COMBINED_ZH = TestConfig(
-    train_datasets=_COMBINED_DATASETS,
-    val_datasets=_COMBINED_DATASETS,
-    test_sets={"zh": _ZH_DATASETS},
+    train_subsets=_COMBINED_SUBSETS,
+    val_subsets=_COMBINED_SUBSETS,
+    test_subsets={"zh": _ZH_SUBSETS},
     subset=None,
 )
 

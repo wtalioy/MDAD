@@ -1,7 +1,7 @@
 import os
-from .base import BaseDataset
+from .base import BaseSubset
 
-class PublicSpeech(BaseDataset):
+class PublicSpeech(BaseSubset):
     def __init__(self, data_dir=None, *args, **kwargs):
         super().__init__(os.path.join(data_dir or "data", "PublicSpeech"), *args, **kwargs)
         self.name = "PublicSpeech"

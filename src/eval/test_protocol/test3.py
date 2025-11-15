@@ -10,9 +10,9 @@ if TYPE_CHECKING:
 __all__ = ["Test3"]
 
 _CONFIG = TestConfig(
-    train_datasets=["interview", "podcast", "publicspeech"],
-    val_datasets=["interview", "podcast", "publicspeech"],
-    test_sets={
+    train_subsets=["interview", "podcast", "publicspeech"],
+    val_subsets=["interview", "podcast", "publicspeech"],
+    test_subsets={
         "CleanFull": ["interview", "podcast", "publicspeech"],
         "Partial": ["partialfake"],
         "Noisy": ["noisyspeech"],

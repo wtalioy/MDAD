@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
         "--baseline",
         type=str,
         nargs="+",
-        default=["aasist", "aasist-l", "rawnet2", "res-tssdnet", "inc-tssdnet", "rawgat-st"],
+        default=["aasist", "aasist-l", "rawnet2", "res-tssdnet", "inc-tssdnet", "rawgat-st", "rapt"],
         help="Baseline model(s) to use",
     )
     parser.add_argument("--data_dir", type=Path, default=Path("data/QuadVoxBench"), help="Path to the data directory")

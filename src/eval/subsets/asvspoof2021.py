@@ -1,14 +1,16 @@
+# This dataset is not used in the QuadVox benchmark, but it is included here for reference.
+
 from typing import List
 import os
 import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
-from .base import BaseDataset
+from .base import BaseSubset
 from ..baselines import Baseline
 from ..config import Label
 
-class ASVspoof2021(BaseDataset):
+class ASVspoof2021(BaseSubset):
     def __init__(self, subset="LA", *args, **kwargs):
         self.subset = subset
         super().__init__()
