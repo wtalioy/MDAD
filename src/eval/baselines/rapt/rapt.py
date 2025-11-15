@@ -192,11 +192,11 @@ class RAPT(Baseline):
         logger.info(f"Training complete! Best EER: {100*best_eer:.2f}% at epoch {best_epoch}")
         logger.remove(log_id)
     
-    def _load_default(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False, seed: Optional[int] = None) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    def _load_cross_dataset(self, split: str = "train", limit: Optional[int] = 512, shuffle: bool = False, seed: Optional[int] = None) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         real_data = []
         fake_data = []
-        logger.info(f"Loading default ASVspoof2019 LA {split} ...")
-        dataset = load_dataset("./ASVspoof_2019_LA", split=split)
+        logger.info(f"Loading cross-domain data from ASVspoof2019 LA {split} ...")
+        dataset = load_dataset("Bisher/ASVspoof_2019_LA", split=split)
         if shuffle:
             dataset = dataset.shuffle(seed=seed if seed is not None else self.seed)
         real_count = 0
