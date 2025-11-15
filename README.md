@@ -24,6 +24,7 @@ This repository includes the full evaluation suite, state-of-the-art baselines, 
 - **Baselines**: [Available Baselines](#available-baselines)
 - **Metrics**: [Evaluation Metrics](#evaluation-metrics)
 - **Advanced Usage**: [Advanced Usage](#advanced-usage)
+- **Utils**: [Utils](#utils)
 - **Logging and Results**: [Logging and Results](#logging-and-results)
 - **Citation**: [Citation](#citation)
 - **License**: [License](#license)
@@ -76,14 +77,14 @@ The recommended way to use QuadVox is through the provided command-line scripts,
 The `quadvox-run` command executes the predefined benchmark experiments.
 
 ```bash
-# Run all four benchmark experiments
+# Run all four benchmark tests
 quadvox-run
 
-# Run a specific experiment (e.g., experiment 1)
-quadvox-run -e expr1
+# Run a specific test (e.g., test 1)
+quadvox-run -t test1
 
-# Run an experiment with a specific baseline
-quadvox-run -e expr1 -b aasist rawnet2
+# Run an test with a specific baseline
+quadvox-run -t test1 -b aasist rawnet2 rapt
 ```
 
 ### Standalone Evaluation
@@ -108,7 +109,6 @@ quadvox-generate -d podcast -t xttsv2 -s en
 ```
 
 
-
 ## Evaluation Guide
 
 Evaluate baseline models using the `quadvox-eval` command.
@@ -123,11 +123,9 @@ quadvox-eval \
   --metric eer
 ```
 
-
-
 ### Arguments
 
-- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `rapt`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
+- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`, `rapt`
 - **-s / --subset**: one or more of: `publicfigure`, `news`, `podcast`, `partialfake`, `audiobook`, `noisyspeech`, `phonecall`, `interview`, `publicspeech`, `movie`, `emotional`
 - **-m / --mode**: `in` or `cross` (for in-domain or cross-domain evaluation)
 - **--metric**: one or more metrics, e.g. `eer`, `auroc`
@@ -238,16 +236,16 @@ quadvox-run -t test1 -b aasist rawnet2
 ### Arguments
 
 - **-t / --test**: one of `test1`, `test2`, `test3`, `test4`, or `all` (default).
-- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `rapt`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`
+- **-b / --baseline**: one or more of: `aasist`, `aasist-l`, `res-tssdnet`, `inc-tssdnet`, `rawnet2`, `rawgat-st`, `rapt`
 - **--data_dir**: path to the data directory.
 - **--device**: compute device (`cuda` or `cpu`, default: `cuda`).
 
 ### Test Descriptions
 
-- **`test1`**: **Domain Generalization Test**: Evaluates generalization from *Scripted* audio (control) to *Spontaneous* and *Real-world* audio (targets)13.
-- **`test2`**: **Emotional Uncanny Valley Test**: Evaluates detectors trained on *Neutral* speech (control) against unseen *Emotional* speech (target) 14.
-- **`test3`**: **Sensitivity vs. Robustness Test**: Jointly tests sensitivity on *PartialFake* audio (target 1) and robustness on *NoisySpeech* (target 2) against a *CleanSpeech* control 15.
-- **`test4`**: **Cross-Lingual Generalization Test**: Evaluates detectors trained on English (en) vs. Chinese (zh) and vice-versa, testing for language-independent artifact detection16.
+- **`test1`**: **Domain Generalization Test**: Evaluates generalization from *Scripted* audio (control) to *Spontaneous* and *Real-world* audio (targets).
+- **`test2`**: **Emotional Uncanny Valley Test**: Evaluates detectors trained on *Neutral* speech (control) against unseen *Emotional* speech (target).
+- **`test3`**: **Sensitivity vs. Robustness Test**: Jointly tests sensitivity on *PartialFake* audio (target 1) and robustness on *NoisySpeech* (target 2) against a *CleanSpeech* control.
+- **`test4`**: **Cross-Lingual Generalization Test**: Evaluates detectors trained on English (en) vs. Chinese (zh) and vice-versa, testing for language-independent artifact detection.
 
 ### Outputs
 
@@ -272,8 +270,8 @@ QuadVox includes 7 state-of-the-art audio deepfake detection models evaluated in
 
 QuadVox supports the following evaluation metrics:
 
-- **EER** (Equal Error Rate): Primary metric for audio deepfake detection18.
-- **AUROC** (Area Under the Receiver Operating Characteristic Curve): Secondary metric19.
+- **EER** (Equal Error Rate): Primary metric for audio deepfake detection.
+- **AUROC** (Area Under the Receiver Operating Characteristic Curve): Secondary metric.
 
 ## Advanced Usage
 
@@ -318,6 +316,15 @@ Model configurations are stored in `src/eval/baselines/{model}/config/`:
 
 - `model.yaml`: Model architecture configuration
 - `train_default.yaml`: Default training configuration
+
+## Utils
+
+Utility scripts for dataset processing and management are available in `src/utils/`, including:
+
+- Dataset splitting and creation scripts for different domains
+- Audio duration calculation and metadata management
+- Dataset filtering, reduction, and resampling tools
+- Backup file cleanup utilities
 
 ## Logging and Results
 
