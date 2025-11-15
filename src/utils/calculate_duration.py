@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Calculate total duration of audio files for each domain, separating real and fake data.
-"""
-
 import os
 import json
 import wave

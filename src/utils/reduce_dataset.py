@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Script to reduce dataset to a certain ratio of original size.
 """
@@ -68,13 +67,13 @@ def count_audio_files_in_entries(entries: List[Dict[str, Any]], base_dir: str) -
 
 def main():
     parser = argparse.ArgumentParser(description="Reduce dataset to a certain ratio of original size")
-    parser.add_argument("-d", "--data_dir", default="data/PublicSpeech",
-                       help="Base directory for the dataset")
+    parser.add_argument("-d", "--subset_dir", default="data/QuadVoxBench/PublicSpeech",
+                       help="Path to the subset directory")
     parser.add_argument("-r", "--ratio", type=float, default=0.25,
                        help="Percentage of entries to keep (0.0 to 1.0)")
     parser.add_argument("-b", "--backup_dir", default=None,
                        help="Directory to backup removed files (if not specified, files will be deleted)")
-    parser.add_argument("--dry-run", action="store_true",
+    parser.add_argument("--dry_run", action="store_true",
                        help="Show what would be done without actually doing it")
     parser.add_argument("-s", "--seed", type=int,
                        help="Random seed for reproducible results")
@@ -87,7 +86,7 @@ def main():
         logger.info(f"Using random seed: {args.seed}")
     
     # Load metadata
-    meta_path = os.path.join(args.data_dir, "meta.json")
+    meta_path = os.path.join(args.subset_dir, "meta.json")
     logger.info(f"Loading metadata from: {meta_path}")
     all_entries = load_meta_json(meta_path)
     logger.info(f"Found {len(all_entries)} metadata entries")
@@ -97,15 +96,15 @@ def main():
         return
     
     # Count total audio files
-    total_audio_files = count_audio_files_in_entries(all_entries, args.data_dir)
+    total_audio_files = count_audio_files_in_entries(all_entries, args.subset_dir)
     logger.info(f"Total audio files across all entries: {total_audio_files}")
     
     # Select random subset
     entries_to_keep, entries_to_remove = select_random_subset(all_entries, args.ratio)
     
     # Count audio files in entries to keep and remove
-    audio_files_to_keep = count_audio_files_in_entries(entries_to_keep, args.data_dir)
-    audio_files_to_remove = count_audio_files_in_entries(entries_to_remove, args.data_dir)
+    audio_files_to_keep = count_audio_files_in_entries(entries_to_keep, args.subset_dir)
+    audio_files_to_remove = count_audio_files_in_entries(entries_to_remove, args.subset_dir)
     
     logger.info(f"\nSummary:")
     logger.info(f"Total metadata entries: {len(all_entries)}")
@@ -148,12 +147,12 @@ def main():
     # Collect all audio files to remove
     all_files_to_remove = []
     for entry in entries_to_remove:
-        audio_files = get_audio_files_from_entry(entry, args.data_dir)
+        audio_files = get_audio_files_from_entry(entry, args.subset_dir)
         all_files_to_remove.extend(audio_files)
     
-    backup_dir = args.backup_dir or args.data_dir + "-backup"
+    backup_dir = args.backup_dir or args.subset_dir + "-backup"
     logger.info(f"Backing up files to: {backup_dir}")
-    backup_audio_files(all_files_to_remove, backup_dir, args.data_dir)
+    backup_audio_files(all_files_to_remove, backup_dir, args.subset_dir)
     
     # Update meta.json with only the entries to keep
     logger.info(f"Updating meta.json...")

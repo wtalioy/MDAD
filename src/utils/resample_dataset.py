@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
 """
 Script to resample all audio files in the directory to a certain sample rate using librosa.
-This script will recursively find all audio files and resample them in-place.
 """
 
 import os
@@ -69,23 +67,23 @@ def find_audio_files(directory):
 
 def main():
     parser = argparse.ArgumentParser(description='Resample all audio files in a directory to a certain sample rate')
-    parser.add_argument('-d', '--data_dir', default='data/Audiobook', 
-                       help='Path to the directory containing audio files (default: data/Audiobook)')
+    parser.add_argument('-d', '--subset_dir', default='data/QuadVoxBench/Audiobook', 
+                       help='Path to the subset directory containing audio files')
     parser.add_argument('-sr', '--sample_rate', type=int, default=16000,
                        help='Target sample rate in Hz (default: 16000)')
     parser.add_argument('--no_backup', action='store_true',
                        help='Do not create backup files')
-    parser.add_argument('--dry-run', action='store_true',
+    parser.add_argument('--dry_run', action='store_true',
                        help='Show what would be processed without actually doing it')
     
     args = parser.parse_args()
     
     # Find all audio files
-    logger.info(f"Searching for audio files in {args.data_dir}")
-    audio_files = find_audio_files(args.data_dir)
+    logger.info(f"Searching for audio files in {args.subset_dir}")
+    audio_files = find_audio_files(args.subset_dir)
     
     if not audio_files:
-        logger.warning(f"No audio files found in {args.data_dir}")
+        logger.warning(f"No audio files found in {args.subset_dir}")
         return
     
     logger.info(f"Found {len(audio_files)} audio files")

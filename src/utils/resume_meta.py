@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Script to update meta.json with generated audio information from log (for unexpected interrupt in generation)
 """
@@ -84,8 +83,8 @@ def update_meta_json(meta_path, mappings):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--log_path", type=str, default="logs/generation_20250801_063525.log")
-    parser.add_argument("-m", "--meta_path", type=str, default="data/Interview/meta.json")
+    parser.add_argument("-l", "--log_path", type=str)
+    parser.add_argument("-m", "--meta_path", type=str, default="data/QuadVoxBench/Interview/meta.json")
     args = parser.parse_args()
     
     logger.info("Parsing log file...")
