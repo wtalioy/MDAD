@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List
 
-__all__ = ["ExperimentConfig", "LanguageConfig", "CrossLanguageExperimentConfig"]
+__all__ = ["TestConfig", "LanguageConfig", "CrossLanguageTestConfig"]
 
 
 @dataclass
-class ExperimentConfig:
-    """Configuration container for a single benchmark experiment."""
+class TestConfig:
+    """Configuration container for a single benchmark test."""
 
     train_datasets: List[str]
     val_datasets: List[str]
@@ -27,8 +27,8 @@ class LanguageConfig:
 
 
 @dataclass
-class CrossLanguageExperimentConfig:
-    """Configuration for experiments training models in multiple languages."""
+class CrossLanguageTestConfig:
+    """Configuration for tests training models in multiple languages."""
 
     languages: List[LanguageConfig]
     test_sets: Dict[str, List[str]]

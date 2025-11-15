@@ -1,13 +1,13 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseExperiment
-from .config import CrossLanguageExperimentConfig, ExperimentConfig, LanguageConfig
+from .base import BaseTest
+from .config import CrossLanguageTestConfig, TestConfig, LanguageConfig
 
 if TYPE_CHECKING:
-    from .runner import ExperimentRunner
+    from .runner import TestRunner
 
-__all__ = ["Experiment4"]
+__all__ = ["Test4"]
 
 # Dataset definitions
 _EN_DATASETS = [
@@ -21,7 +21,7 @@ _COMBINED_DATASETS = [
 ]
 
 # Cross-language generalization: separate models per language
-_CONFIG_SEPARATE = CrossLanguageExperimentConfig(
+_CONFIG_SEPARATE = CrossLanguageTestConfig(
     languages=[
         LanguageConfig(
             name="en",
@@ -43,7 +43,7 @@ _CONFIG_SEPARATE = CrossLanguageExperimentConfig(
 )
 
 # Combined EN+ZH model tested on EN
-_CONFIG_COMBINED_EN = ExperimentConfig(
+_CONFIG_COMBINED_EN = TestConfig(
     train_datasets=_COMBINED_DATASETS,
     val_datasets=_COMBINED_DATASETS,
     test_sets={"en": _EN_DATASETS},
@@ -51,7 +51,7 @@ _CONFIG_COMBINED_EN = ExperimentConfig(
 )
 
 # Combined EN+ZH model tested on ZH
-_CONFIG_COMBINED_ZH = ExperimentConfig(
+_CONFIG_COMBINED_ZH = TestConfig(
     train_datasets=_COMBINED_DATASETS,
     val_datasets=_COMBINED_DATASETS,
     test_sets={"zh": _ZH_DATASETS},
@@ -59,7 +59,7 @@ _CONFIG_COMBINED_ZH = ExperimentConfig(
 )
 
 
-class Experiment4(BaseExperiment):
+class Test4(BaseTest):
     """Cross-Language Generalization Test.
     
     Tests three scenarios:
@@ -68,24 +68,24 @@ class Experiment4(BaseExperiment):
     3. Combined multilingual model tested on ZH
     """
 
-    name = "expr4"
+    name = "test4"
 
     @classmethod
-    def run(cls, runner: ExperimentRunner) -> dict[str, Any]:
+    def run(cls, runner: TestRunner) -> dict[str, Any]:
         results = {}
         
         # Scenario 1: Separate models per language
-        results["separate_models"] = runner._run_cross_language_experiment(
+        results["separate_models"] = runner._run_cross_language_test(
             f"{cls.name}_separate", _CONFIG_SEPARATE
         )
         
         # Scenario 2: Combined model tested on EN
-        results["combined_test_en"] = runner._run_experiment(
+        results["combined_test_en"] = runner._run_test(
             f"{cls.name}_combined_en", _CONFIG_COMBINED_EN
         )
         
         # Scenario 3: Combined model tested on ZH
-        results["combined_test_zh"] = runner._run_experiment(
+        results["combined_test_zh"] = runner._run_test(
             f"{cls.name}_combined_zh", _CONFIG_COMBINED_ZH
         )
         

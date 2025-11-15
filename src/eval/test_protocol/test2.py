@@ -1,15 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseExperiment
-from .config import ExperimentConfig
+from .base import BaseTest
+from .config import TestConfig
 
 if TYPE_CHECKING:
-    from .runner import ExperimentRunner
+    from .runner import TestRunner
 
-__all__ = ["Experiment2"]
+__all__ = ["Test2"]
 
-_CONFIG = ExperimentConfig(
+_CONFIG = TestConfig(
     train_datasets=[
         "audiobook", "interview", "movie", "news", "phonecall",
         "podcast", "publicfigure", "publicspeech",
@@ -22,11 +22,11 @@ _CONFIG = ExperimentConfig(
 )
 
 
-class Experiment2(BaseExperiment):
+class Test2(BaseTest):
     """Emotional Prosody Uncanny Valley Test."""
 
-    name = "expr2"
+    name = "test2"
 
     @classmethod
-    def run(cls, runner: ExperimentRunner) -> dict[str, Any]:
-        return runner._run_experiment(cls.name, _CONFIG)
+    def run(cls, runner: TestRunner) -> dict[str, Any]:
+        return runner._run_test(cls.name, _CONFIG)

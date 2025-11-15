@@ -10,11 +10,11 @@ from loguru import logger
 
 from ..baselines import BASELINE_MAP
 from ..mdad_datasets import DATASET_MAP
-from . import CrossLanguageExperimentConfig, ExperimentConfig
+from . import CrossLanguageTestConfig, TestConfig
 
-__all__ = ["ExperimentRunner"]
+__all__ = ["TestRunner"]
 
-class ExperimentRunner:
+class TestRunner:
     def __init__(self, data_dir: str, baselines: List[str], device: str = "cuda"):
         self.data_dir = data_dir
         self.baseline_names = baselines if isinstance(baselines, list) else [baselines]
@@ -25,7 +25,7 @@ class ExperimentRunner:
 
         os.makedirs("logs", exist_ok=True)
         os.makedirs("results", exist_ok=True)
-        log_file = f"logs/experiment_{self.timestamp}.log"
+        log_file = f"logs/test_{self.timestamp}.log"
         logger.add(log_file, rotation="20 MB", retention="30 days")
 
     def _create_combined_dataset(
@@ -72,7 +72,7 @@ class ExperimentRunner:
         self, train_datasets: List[str], val_datasets: List[str], expr_name: str, subset: str | None, baseline_name: str
     ) -> Any:
         """Train a model on specified datasets."""
-        logger.info(f"Starting training for experiment {expr_name}")
+        logger.info(f"Starting training for test {expr_name}")
         logger.info(f"Training {baseline_name} on {train_datasets}")
 
         train_data, train_labels = self._create_combined_dataset(train_datasets, "train", subset)
@@ -112,7 +112,7 @@ class ExperimentRunner:
         if baseline is None:
             return {"eer": float("inf")}
 
-        logger.info(f"Start evaluation for experiment {expr_name}")
+        logger.info(f"Start evaluation for test {expr_name}")
         logger.info(f"Evaluating {baseline_name} on {test_datasets}")
 
         if len(test_datasets) == 1 and test_datasets[0] in ["partialfake", "noisyspeech"]:
@@ -128,10 +128,10 @@ class ExperimentRunner:
             data=test_data, labels=test_labels, metrics=["eer"], sr=16000, in_domain=True, dataset_name=expr_name
         )
 
-    def _run_experiment(self, name: str, config: ExperimentConfig) -> dict[str, Any]:
-        """Run a single experiment described by *config* for all baselines."""
+    def _run_test(self, name: str, config: TestConfig) -> dict[str, Any]:
+        """Run a single test described by *config* for all baselines."""
         logger.info(f"Running {name} with baselines: {', '.join(self.baseline_names)}")
-        experiment_results: dict[str, Any] = {}
+        test_results: dict[str, Any] = {}
 
         for baseline_name in self.baseline_names:
             logger.info(f"  -> Baseline: {baseline_name}")
@@ -153,15 +153,15 @@ class ExperimentRunner:
                 )
                 for test_name, datasets in config.test_sets.items()
             }
-            experiment_results[baseline_name] = baseline_results
+            test_results[baseline_name] = baseline_results
 
-        self.results[name] = experiment_results
+        self.results[name] = test_results
         self.save_results()
-        return experiment_results
+        return test_results
 
-    def _run_cross_language_experiment(self, name: str, config: CrossLanguageExperimentConfig) -> Dict[str, Any]:
-        """Run an experiment that trains separate models per language."""
-        logger.info(f"Running cross-language experiment {name}")
+    def _run_cross_language_test(self, name: str, config: CrossLanguageTestConfig) -> Dict[str, Any]:
+        """Run a test that trains separate models per language."""
+        logger.info(f"Running cross-language test {name}")
         exp_results: dict[str, Any] = {}
 
         for baseline_name in self.baseline_names:
@@ -199,7 +199,7 @@ class ExperimentRunner:
 
     def save_results(self):
         """Save results to a JSON file."""
-        results_file = f"results/result_{self.timestamp}.json"
+        results_file = f"results/test_{self.timestamp}.json"
         with open(results_file, "w") as f:
             json.dump(self.results, f, indent=2)
         logger.info(f"Results saved to {results_file}")

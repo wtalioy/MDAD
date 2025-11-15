@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mdad"
+name = "quadvox"
 version = "0.1.0"
-description = "MDAD Benchmark Experiments"
+description = "QuadVox Benchmark"
 readme = "README.md"
 requires-python = ">=3.12"
 
@@ -16,12 +16,12 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/wtalioy/MDAD"
+"Homepage" = "https://github.com/wtalioy/QuadVox"
 
 [project.scripts]
-mdad-run = "eval.experiments.cli:main"
-mdad-eval = "eval.main:main"
-mdad-generate = "generation.main:main"
+quadvox-run = "eval.test_protocol.cli:main"
+quadvox-eval = "eval.main:main"
+quadvox-generate = "generation.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
