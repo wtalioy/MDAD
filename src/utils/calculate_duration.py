@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Calculate total duration of audio files for each domain, separating real and fake data.
-"""
-
 import os
 import json
 import wave
@@ -14,7 +9,7 @@ def get_audio_duration(file_path):
     """Get duration of an audio file in seconds."""
     try:
         # Try using librosa first (handles more formats)
-        duration = librosa.get_duration(path=file_path)
+        duration = librosa.get_duration(y=file_path)
         return duration
     except Exception as e:
         try:
@@ -184,13 +179,13 @@ def format_duration(seconds):
         return f"{secs}s"
 
 def main():
-    data_dir = Path('data')
+    data_dir = Path('data/MTAD')
     if not data_dir.exists():
         print("Error: data directory not found!")
         return
     
     # Get all domain directories
-    domains = [d for d in data_dir.iterdir() if d.is_dir() and d.name not in ['.vscode']]
+    domains = [d for d in data_dir.iterdir() if d.is_dir() and d.name not in ['.vscode', '.git']]
     
     print("Calculating audio durations for each domain...")
     print("=" * 80)

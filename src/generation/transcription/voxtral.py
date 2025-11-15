@@ -21,7 +21,7 @@ if __name__ == "__main__":
     from tqdm import tqdm
     import os
     parser = ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="data/Podcast")
+    parser.add_argument("--data_dir", type=str, default="data/QuadVoxBench/Podcast")
     parser.add_argument("--language", type=str, default="en")
     parser.add_argument("--batch_size", type=int, default=4)
     args = parser.parse_args()

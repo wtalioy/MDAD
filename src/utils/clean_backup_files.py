@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Script to clean up backup files created during audio resampling.
-This script safely removes .backup files from the Audiobook directory.
-"""
-
 import os
 import argparse
 from pathlib import Path
@@ -11,15 +5,6 @@ from tqdm import tqdm
 from loguru import logger
 
 def find_backup_files(directory):
-    """
-    Recursively find all backup files in the given directory.
-    
-    Args:
-        directory (str): Root directory to search
-    
-    Returns:
-        list: List of backup file paths
-    """
     backup_files = []
     directory = Path(directory)
     
@@ -36,31 +21,10 @@ def find_backup_files(directory):
     return backup_files
 
 def verify_original_file_exists(backup_path):
-    """
-    Check if the original file (without .backup extension) exists.
-    
-    Args:
-        backup_path (Path): Path to the backup file
-    
-    Returns:
-        bool: True if original file exists, False otherwise
-    """
     original_path = backup_path.with_suffix('')  # Remove .backup extension
     return original_path.exists()
 
 def clean_backup_files(directory, dry_run=False, verify_originals=True, force=False):
-    """
-    Clean up backup files in the specified directory.
-    
-    Args:
-        directory (str): Directory to search for backup files
-        dry_run (bool): If True, only show what would be deleted
-        verify_originals (bool): If True, only delete backups where original files exist
-        force (bool): If True, delete all backup files without verification
-    
-    Returns:
-        tuple: (deleted_count, skipped_count, error_count)
-    """
     logger.info(f"Searching for backup files in {directory}")
     backup_files = find_backup_files(directory)
     
@@ -100,8 +64,8 @@ def clean_backup_files(directory, dry_run=False, verify_originals=True, force=Fa
 
 def main():
     parser = argparse.ArgumentParser(description='Clean up backup files from audio resampling')
-    parser.add_argument('-d', '--data_dir', default='data/Audiobook', 
-                       help='Path to the directory containing backup files (default: data/Audiobook)')
+    parser.add_argument('-d', '--subset_dir', default='data/QuadVoxBench/Audiobook', 
+                       help='Path to the subset directory containing backup files')
     parser.add_argument('--dry-run', action='store_true',
                        help='Show what would be deleted without actually deleting')
     parser.add_argument('--no-verify', action='store_true',
@@ -113,7 +77,7 @@ def main():
     
     # Safety check
     if not args.dry_run and not args.force:
-        logger.warning(f"This will delete backup files from {args.data_dir}")
+        logger.warning(f"This will delete backup files from {args.subset_dir}")
         logger.warning("This action cannot be undone!")
         response = input("Are you sure you want to continue? (yes/no): ")
         if response.lower() not in ['yes', 'y']:
@@ -122,7 +86,7 @@ def main():
     
     # Clean backup files
     deleted, skipped, errors = clean_backup_files(
-        args.data_dir, 
+        args.subset_dir, 
         dry_run=args.dry_run,
         verify_originals=not args.no_verify,
         force=args.force

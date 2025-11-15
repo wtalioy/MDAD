@@ -5,8 +5,8 @@ import random
 from copy import deepcopy
 import os
 
-def create_splits(data_dir: str, train_ratio: float):
-    meta_path = os.path.join(data_dir, "meta.json")
+def create_splits(subset_dir: str, train_ratio: float):
+    meta_path = os.path.join(subset_dir, "meta.json")
     with open(meta_path, 'r') as f:
         data = json.load(f)
     
@@ -39,7 +39,7 @@ def create_splits(data_dir: str, train_ratio: float):
     print(f"Train split size: {len(train_split)} ({len(train_split) / total_entries:.2%})")
     print(f"Dev split size: {len(dev_split)} ({len(dev_split) / total_entries:.2%})")
 
-    output_dir = Path(meta_path).parent
+    output_dir = Path(subset_dir)
     
     with open(output_dir / "meta_train.json", 'w') as f:
         json.dump(train_split, f, ensure_ascii=False, indent=2)
@@ -52,7 +52,7 @@ def create_splits(data_dir: str, train_ratio: float):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--data_dir", type=str, default="data/Emotional", help="Path to the data directory")
+    parser.add_argument("-d", "--subset_dir", type=str, default="data/QuadVoxBench/Emotional", help="Path to the subset directory")
     parser.add_argument("-r", "--train_ratio", type=float, default=0.85, help="Ratio of train split")
     args = parser.parse_args()
-    create_splits(args.data_dir, args.train_ratio)
+    create_splits(args.subset_dir, args.train_ratio)

@@ -1,0 +1,12 @@
+batch_size: 16
+num_epoch: 40
+basemodel_lr: 1.0e-05
+mmd_lr: 1.0e-05
+basemodel_wd: 1.0e-04
+mmd_wd: 0.0
+eval_interval: 2
+patience: 5
+extractor_lr: 1.0e-06
+extractor_wd: 1.0e-04
+
+seed: 42
