@@ -19,7 +19,7 @@ def display_results(results: dict, baseline: str, dataset: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate baseline on dataset")
-    parser.add_argument("-b", "--baseline", type=str, nargs="+", default=["mkrt"], help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
+    parser.add_argument("-b", "--baseline", type=str, nargs="+", default=["rapt"], help="Name of the baseline", choices=list(BASELINE_MAP.keys()))
     parser.add_argument("-d", "--dataset", type=str, nargs="+", default=["audiobook", "news", "podcast", "interview", "phonecall", "publicspeech", "publicfigure", "movie", "emotional"], help="Name of the dataset", choices=list(DATASET_MAP.keys()))
     parser.add_argument("-s", "--subset", type=str, default=None, help="Subset of the dataset")
     parser.add_argument("-m", "--mode", type=str, default="in", help="Mode of the evaluation", choices=["cross", "in"])

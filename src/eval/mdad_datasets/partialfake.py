@@ -71,11 +71,11 @@ class PartialFake(BaseDataset):
         Returns:
             Dictionary containing evaluation results
         """
-        # Handle reference data for MKRT
+        # Handle reference data for RAPT
         ref_data = None
         ref_labels = None
-        if baseline.name == 'MKRT' and in_domain:
-            # For MKRT, we need reference data from the training set
+        if baseline.name == 'RAPT' and in_domain:
+            # For RAPT, we need reference data from the training set
             # Since this is a special dataset, we'll use the first ref_num samples from the first source
             first_source = list(self.data.keys())[0] if self.data else None
             if first_source and len(self.data[first_source]) >= baseline.ref_num:

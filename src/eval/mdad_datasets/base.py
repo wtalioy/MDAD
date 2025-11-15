@@ -78,7 +78,7 @@ class BaseDataset:
         if in_domain:
             data = self.data['test']
             labels = self.labels['test']
-            if baseline.name == 'MKRT':
+            if baseline.name == 'RAPT':
                 ref_data = self.data['train'][:baseline.ref_num]
                 ref_labels = self.labels['train'][:baseline.ref_num]
         else:
@@ -108,7 +108,7 @@ class BaseDataset:
         """
         ref_data = None
         ref_labels = None
-        if baseline.name == 'MKRT':
+        if baseline.name == 'RAPT':
             train_data = self.data['train'][baseline.ref_num:]
             train_labels = self.labels['train'][baseline.ref_num:]
             ref_data = self.data['train'][:baseline.ref_num]

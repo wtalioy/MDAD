@@ -5,7 +5,7 @@ import os
 from .extractor import Extractor
 from .mmd_model import MMDBaseModel
 
-class MKRTModel(nn.Module):
+class RAPTModel(nn.Module):
     def __init__(self, config: dict, device: str):
         super().__init__()
         self.device = device

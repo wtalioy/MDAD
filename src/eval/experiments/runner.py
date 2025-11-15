@@ -84,14 +84,14 @@ class ExperimentRunner:
 
         baseline = BASELINE_MAP[baseline_name](device=self.device)
         ref_data, ref_labels = None, None
-        if baseline.name == "MKRT":
+        if baseline.name == "RAPT":
             ref_num = baseline.ref_num * 2
             if len(train_data) >= ref_num:
                 ref_data, ref_labels = train_data[:ref_num], train_labels[:ref_num]
                 train_data, train_labels = train_data[ref_num:], train_labels[ref_num:]
-                logger.info(f"Extracted {ref_num} reference samples for MKRT")
+                logger.info(f"Extracted {ref_num} reference samples for RAPT")
             else:
-                logger.warning(f"Not enough training samples for MKRT reference (need {ref_num}, got {len(train_data)})")
+                logger.warning(f"Not enough training samples for RAPT reference (need {ref_num}, got {len(train_data)})")
 
         baseline.train(
             train_data=train_data,

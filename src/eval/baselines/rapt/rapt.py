@@ -13,20 +13,20 @@ from scipy.stats import combine_pvalues
 
 from ..base import Baseline
 from .mmd_utils import MMD_3_Sample_Test, MMDu
-from .model import MKRTModel
+from .model import RAPTModel
 from ...config import Label
 
-class MKRT(Baseline):
+class RAPT(Baseline):
     def __init__(self, device: str = "cuda", **kwargs):
         super().__init__(device=device, **kwargs)
-        self.name = "MKRT"
+        self.name = "RAPT"
         self.device = device
         self.sample_rate = 16000
         self.ref_num = 200
         self.seed = 34
         self.supported_metrics = ['eer', 'auroc']
 
-        self.model = MKRTModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
+        self.model = RAPTModel(config=self._load_model_config(os.path.dirname(__file__)), device=device)
 
     def _init_train(self, args: dict):
         self.finetune_extractor = args['finetune_extractor']
@@ -159,7 +159,7 @@ class MKRT(Baseline):
         self._auto_tune_bandwidths(train_real_data, train_fake_data)
 
         log_id = logger.add("logs/train.log", rotation="10 MB", retention="60 days")
-        logger.info(f"Training MKRT on {dataset_name}")
+        logger.info(f"Training RAPT on {dataset_name}")
         
         self._init_train(args)
         
