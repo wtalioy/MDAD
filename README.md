@@ -279,9 +279,7 @@ QuadVox supports the following evaluation metrics:
 
 To add a new dataset, create a class inheriting from `BaseSubset`:
 
-Python
-
-```
+```python
 from quadvox_datasets.base import BaseSubset
 
 class MyDataset(BaseSubset):
@@ -294,9 +292,7 @@ class MyDataset(BaseSubset):
 
 To add a new baseline model, inherit from the `Baseline` class:
 
-Python
-
-```
+```python
 from quadvox.baselines.base import Baseline
 
 class MyBaseline(Baseline):
