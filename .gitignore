@@ -9,6 +9,9 @@
 # data files
 data/
 
+# log files
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
