@@ -232,6 +232,9 @@ __marimo__/
 *.opus
 *.m4b
 
+# macOS specific files
+.DS_Store
+
 !docs/assets/audio/*.wav
 !src/generation/noise/*.wav
 !src/generation/samples/*.wav
