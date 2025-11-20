@@ -231,3 +231,7 @@ __marimo__/
 *.webm
 *.opus
 *.m4b
+
+!docs/assets/audio/*.wav
+!src/generation/noise/*.wav
+!src/generation/samples/*.wav
