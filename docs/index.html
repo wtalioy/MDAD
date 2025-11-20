@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuadVox: The Benchmark That Breaks SOTA Detectors</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Wavesurfer.js -->
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <h2>QuadVox</h2>
+            </div>
+            <!-- <div class="nav-links">
+                <a href="#paper" class="nav-link"><i class="fas fa-file-alt"></i> Paper</a>
+                <a href="https://huggingface.co/datasets/Lioy/QuadVoxBench" class="nav-link"><i
+                        class="fas fa-database"></i> Dataset</a>
+                <a href="https://github.com/wtalioy/QuadVox" class="nav-link"><i class="fab fa-github"></i> GitHub</a>
+            </div> -->
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">QuadVox: The Benchmark That Breaks SOTA Detectors</h1>
+            <p class="hero-subtitle">Fine-grained evaluation across Style, Emotion, Noise, and Manipulation</p>
+
+            <!-- Masterpiece Audio Player -->
+            <div class="masterpiece-container">
+                <div class="audio-card featured">
+                    <div class="card-header">
+                        <h3>Can You Spot the Fake?</h3>
+                        <p class="challenge-text">Top AI models fail on this clip 45% of the time</p>
+                    </div>
+                    <div class="waveform-container">
+                        <div id="waveform-hero"></div>
+                    </div>
+                    <div class="audio-controls">
+                        <button class="play-btn" data-player="hero">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div class="audio-info">
+                            <span class="badge badge-purple">Spontaneous</span>
+                            <span class="badge badge-red">Slight Noise</span>
+                            <span class="badge badge-purple">Partial Fake</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Comparison Section -->
+    <section class="comparison-section">
+        <div class="container">
+            <h2 class="section-title">The Four Aspects of QuadVox</h2>
+            <p class="section-description">Explore how QuadVox challenges state-of-the-art detectors across four
+                critical aspects</p>
+
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="style">
+                    <i class="fas fa-microphone"></i>
+                    <span>Speech Style</span>
+                </button>
+                <button class="tab-btn" data-tab="emotion">
+                    <i class="fas fa-face-smile"></i>
+                    <span>Emotional Prosody</span>
+                </button>
+                <button class="tab-btn" data-tab="acoustic">
+                    <i class="fas fa-volume-up"></i>
+                    <span>Acoustic Environment</span>
+                </button>
+                <button class="tab-btn" data-tab="manipulation">
+                    <i class="fas fa-scissors"></i>
+                    <span>Manipulation Type</span>
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content-container">
+
+                <!-- Tab 1: Speech Style -->
+                <div class="tab-content active" id="tab-style">
+                    <div class="comparison-grid three-col">
+                        <!-- Standard/Easy Column -->
+                        <div class="comparison-col">
+                            <div class="col-label label-green">
+                                <i class="fas fa-check-circle"></i> Standard Benchmark
+                            </div>
+                            <div class="audio-card">
+                                <div class="card-header">
+                                    <h3>Scripted Speech</h3>
+                                    <p class="card-subtitle">Easy to Detect</p>
+                                </div>
+                                <div class="waveform-container">
+                                    <div id="waveform-style-scripted"></div>
+                                </div>
+                                <div class="audio-controls">
+                                    <button class="play-btn" data-player="style-scripted">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info">
+                                        <span class="badge badge-green">Audiobook</span>
+                                        <span class="badge badge-gray">Clean</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QuadVox Challenge - Spontaneous Column -->
+                        <div class="comparison-col">
+                            <div class="col-label label-purple">
+                                <i class="fas fa-exclamation-triangle"></i> QuadVox Challenge
+                            </div>
+                            <div class="audio-card">
+                                <div class="card-header">
+                                    <h3>Spontaneous Speech</h3>
+                                    <p class="card-subtitle">Hard to Detect</p>
+                                </div>
+                                <div class="waveform-container">
+                                    <div id="waveform-style-spontaneous"></div>
+                                </div>
+                                <div class="audio-controls">
+                                    <button class="play-btn" data-player="style-spontaneous">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info">
+                                        <span class="badge badge-purple">Podcast</span>
+                                        <span class="badge badge-red">High Volatility</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QuadVox Challenge - Real-World Column -->
+                        <div class="comparison-col">
+                            <div class="col-label label-purple">
+                                <i class="fas fa-exclamation-triangle"></i> QuadVox Challenge
+                            </div>
+                            <div class="audio-card">
+                                <div class="card-header">
+                                    <h3>Real-World Speech</h3>
+                                    <p class="card-subtitle">Complex Environment</p>
+                                </div>
+                                <div class="waveform-container">
+                                    <div id="waveform-style-realworld"></div>
+                                </div>
+                                <div class="audio-controls">
+                                    <button class="play-btn" data-player="style-realworld">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info">
+                                        <span class="badge badge-purple">Public Speech</span>
+                                        <span class="badge badge-red">Background Noise</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Emotional Prosody (The Blind Test) -->
+                <div class="tab-content" id="tab-emotion">
+                    <div class="blind-test-header">
+                        <h3>The Blind Test</h3>
+                        <p>Can you tell which sample is real and which is a QuadVox deepfake? Click reveal to find out.
+                        </p>
+                    </div>
+
+                    <div class="comparison-grid blind-test">
+                        <!-- Sample A -->
+                        <div class="comparison-col blind-test-card" data-sample="a">
+                            <div class="col-label label-gray blind-label" data-label="a">
+                                <i class="fas fa-question-circle"></i> <span class="label-text">Sample A</span>
+                            </div>
+                            <div class="audio-card">
+                                <div class="card-header">
+                                    <h3 class="blind-title">Sample A</h3>
+                                    <p class="card-subtitle blind-subtitle">Emotional Speech</p>
+                                </div>
+                                <div class="waveform-container">
+                                    <div id="waveform-emotion-a"></div>
+                                </div>
+                                <div class="audio-controls">
+                                    <button class="play-btn" data-player="emotion-a">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info blind-badges">
+                                        <span class="badge badge-gray">Angry</span>
+                                        <span class="badge badge-gray">High Emotion</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sample B -->
+                        <div class="comparison-col blind-test-card" data-sample="b">
+                            <div class="col-label label-gray blind-label" data-label="b">
+                                <i class="fas fa-question-circle"></i> <span class="label-text">Sample B</span>
+                            </div>
+                            <div class="audio-card">
+                                <div class="card-header">
+                                    <h3 class="blind-title">Sample B</h3>
+                                    <p class="card-subtitle blind-subtitle">Emotional Speech</p>
+                                </div>
+                                <div class="waveform-container">
+                                    <div id="waveform-emotion-b"></div>
+                                </div>
+                                <div class="audio-controls">
+                                    <button class="play-btn" data-player="emotion-b">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info blind-badges">
+                                        <span class="badge badge-gray">Angry</span>
+                                        <span class="badge badge-gray">High Emotion</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reveal Button -->
+                    <div class="reveal-container">
+                        <button class="reveal-btn-large" id="emotion-reveal-btn">
+                            <i class="fas fa-eye"></i> Reveal Which Is Real
+                        </button>
+                    </div>
+
+                    <div class="info-note" id="emotion-info-note" style="display: none;">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Detectors fail here because the synthetic prosody mimics the high volatility of real
+                            anger.</p>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Acoustic Environment -->
+                <div class="tab-content" id="tab-acoustic">
+                    <div class="single-player-container">
+                        <div class="audio-card wide">
+                            <div class="card-header">
+                                <h3>Real-World Noise Test</h3>
+                                <p class="card-subtitle">Toggle between clean and noisy environments</p>
+                            </div>
+
+                            <!-- Toggle Switch -->
+                            <div class="noise-toggle-container">
+                                <span class="toggle-label">Studio Quality</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="noise-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-label active-label">Real-World Noise</span>
+                            </div>
+
+                            <div class="waveform-container">
+                                <div id="waveform-noise-clean"></div>
+                                <div id="waveform-noise-traffic" style="display: none;"></div>
+                            </div>
+
+                            <div class="audio-controls">
+                                <button class="play-btn" data-player="noise">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <div class="audio-info">
+                                    <span class="badge badge-purple">Deepfake</span>
+                                    <span class="badge badge-gray" id="noise-level-badge">Clean</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-note">
+                            <i class="fas fa-lightbulb"></i>
+                            <p>Real-world noise masks synthetic artifacts. Hear how the same deepfake becomes
+                                undetectable when mixed with traffic noise.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Manipulation Type -->
+                <div class="tab-content" id="tab-manipulation">
+                    <div class="single-player-container">
+                        <div class="audio-card wide">
+                            <div class="card-header">
+                                <h3>Partial Fake Detection</h3>
+                                <p class="card-subtitle">Finding the needle in the haystack</p>
+                            </div>
+
+                            <div class="waveform-container">
+                                <div id="waveform-partial"></div>
+                            </div>
+
+                            <div class="audio-controls">
+                                <button class="play-btn" data-player="partial">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <div class="audio-info">
+                                    <span class="badge badge-purple">Partial Fake</span>
+                                    <span class="badge badge-red">Public Speech</span>
+                                </div>
+                            </div>
+
+                            <!-- Transcript Box -->
+                            <div class="transcript-container">
+                                <div class="transcript-header">
+                                    <h4>Transcript</h4>
+                                    <button class="reveal-btn" id="reveal-btn">
+                                        <i class="fas fa-eye"></i> Reveal Synthetic Words
+                                    </button>
+                                </div>
+                                <div class="transcript-text" id="transcript">
+                                    ... suppose they arrive and they <span class="hidden-fake">give you a box, and</span>
+                                    the box has two knobs one knob
+                                    is the knob for controlling global temperature maybe another knob is a knob for
+                                    controlling ...
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-note">
+                            <i class="fas fa-search"></i>
+                            <p>Partial fakes splice synthetic words into real speech. Current detectors struggle to
+                                pinpoint these subtle manipulations.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Citation Section -->
+    <!-- <section class="citation-section">
+        <div class="container">
+            <h2>Citation</h2>
+            <div class="citation-box">
+                <pre><code>@inproceedings{quadvox2026,
+  title={QuadVox: A Large-Scale Fine-Grained Benchmark with Relative Audio Proximity Test for Robust Audio Deepfake Detection},
+  author={Ruiming Wang, et al.},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2026}
+}</code></pre>
+            </div>
+        </div>
+    </section> -->
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 QuadVox Project. Made with <i class="fas fa-heart"></i> for advancing audio deepfake
+                detection research.</p>
+            <!-- <div class="footer-links">
+                <a href="#paper"><i class="fas fa-file-alt"></i> Paper</a>
+                <a href="https://github.com/wtalioy/QuadVox"><i class="fab fa-github"></i> GitHub</a>
+                <a href="https://huggingface.co/datasets/Lioy/QuadVoxBench"><i class="fas fa-database"></i> Dataset</a>
+            </div> -->
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="assets/js/main.js"></script>
+</body>
+
+</html>
