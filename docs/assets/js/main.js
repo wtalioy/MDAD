@@ -10,30 +10,26 @@ const audioPlayers = {};
 let currentlyPlaying = null;
 
 // ===========================
-// Audio File Paths (Placeholders)
+// Audio File Paths
 // ===========================
 const audioFiles = {
     hero: 'assets/audio/hero_masterpiece.wav',
     styleScripted: 'assets/audio/style_scripted.wav',
     styleSpontaneous: 'assets/audio/style_spontaneous.wav',
     styleRealworld: 'assets/audio/style_realworld.wav',
-    emotionA: 'assets/audio/emotion_real.wav',      // Real emotional speech
-    emotionB: 'assets/audio/emotion_fake.wav',      // Fake emotional speech
+    emotionA: 'assets/audio/emotion_real.wav',
+    emotionB: 'assets/audio/emotion_fake.wav',
     noiseClean: 'assets/audio/noise_clean.wav',
     noiseTraffic: 'assets/audio/noise_traffic.wav',
     partial: 'assets/audio/partial_clip.wav'
 };
 
 // Blind test configuration (Sample A is real, Sample B is fake)
-// To randomize: Change 'realSample' to 'b' and 'fakeSample' to 'a' and swap audio files
 const blindTestConfig = {
-    realSample: 'a',  // Which sample is real ('a' or 'b')
-    fakeSample: 'b'   // Which sample is fake ('a' or 'b')
+    realSample: 'a',
+    fakeSample: 'b'
 };
 
-// ===========================
-// Initialize on DOM Load
-// ===========================
 document.addEventListener('DOMContentLoaded', function () {
     initializeWavesurfers();
     initializeTabSwitching();
@@ -411,7 +407,6 @@ function initializeTranscriptReveal() {
 Object.keys(audioPlayers).forEach(key => {
     audioPlayers[key].on('error', function (error) {
         console.warn(`Audio file not found for ${key}:`, error);
-        // You can add UI feedback here if needed
     });
 });
 
@@ -532,4 +527,3 @@ function handleMobileView() {
 // Listen for resize events
 window.addEventListener('resize', handleMobileView);
 handleMobileView();
-
